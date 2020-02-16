@@ -1,4 +1,4 @@
-                    BasicWebServer - alanesq@disroot.org - Jan2020
+                    BasicWebServer - alanesq@disroot.org - Feb2020
                     ==============================================
 
 I find that when creating pretty much any new project with an ESP8266 or ESP32 I use this sketch as a starting point, 
@@ -21,4 +21,10 @@ are put in the procedure "data" as this is then automatically updated every few 
 but I think the simplest).
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
+
+Note: I have updated this sketch to use newer versions of libraries so if you have an older version you will
+      need to update your libraries.
+
+It now suports OTA updates (this can be disabled in the settings if preferred)
+
 

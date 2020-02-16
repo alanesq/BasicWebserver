@@ -2,7 +2,7 @@
  *
  *             Basic web server For ESP8266/ESP32 using Arduino IDE 
  *             
- *             Included files: gmail.h, standard.h and wifi.h (gmail.h is optional)
+ *             Included files: gmail.h, standard.h, ota.h and wifi.h (gmail.h is optional)
  *             
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
  *      I have found to provide a basic web page displaying updating information, control buttons etc..
@@ -23,6 +23,8 @@
  * 
  *      Lots of great info. - https://randomnerdtutorials.com  or  https://techtutorialsx.com
  *                            https://www.baldengineer.com/
+ *      Handy way to try out your C++ code:   https://coliru.stacked-crooked.com/
+ * 
  *      
  *      Much of the sketch is the code from other people's work which I have combined together, I believe I have links 
  *      to all the sources but let me know if I have missed anyone.
@@ -38,22 +40,26 @@
 // ---------------------------------------------------------------
 
 
+  #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
+  
   const String stitle = "BasicWebServer";                // title of this sketch
 
-  const String sversion = "20Jan20";                     // version of this sketch
+  const String sversion = "16Feb20";                     // version of this sketch
+
+  const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
   
   const String HomeLink = "/";                           // Where home button on web pages links to (usually "/")
 
-  const int datarefresh = 3000;                          // Refresh rate of the updating data on web page (1000 = 1 second)
+  const uint16_t datarefresh = 3000;                     // Refresh rate of the updating data on web page (1000 = 1 second)
   String JavaRefreshTime = "500";                        // time delay when loading url in web pages (Javascript)
   
-  const int LogNumber = 40;                              // number of entries to store in the system log
+  const byte LogNumber = 40;                             // number of entries to store in the system log
 
-  const int ServerPort = 80;                             // ip port to serve web pages on
+  const uint16_t ServerPort = 80;                        // ip port to serve web pages on
 
-  const int led = 2;                                    // indicator LED pin - D0/D4 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32
+  const byte led = 2;                                    // indicator LED pin - D0/D4 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32
 
-  const int ledBlinkRate = 1500;                         // Speed to blink the status LED (milliseconds)
+  const uint16_t ledBlinkRate = 1500;                    // Speed to blink the status LED (milliseconds)
   
   // const onboardButton = D3;                              // onboard button (nodemcu boards)
 
@@ -64,24 +70,24 @@
 // ---------------------------------------------------------------
 
 
-unsigned long LEDtimer = millis();           // used for flashing the LED
+uint32_t LEDtimer = millis();           // used for flashing the LED
   
   
-#include "wifi.h"         // Load the Wifi / NTP stuff
+#include "wifi.h"                       // Load the Wifi / NTP stuff
 
-#include "standard.h"     // Standard BasicWebServer procedures
+#include "standard.h"                   // Standard BasicWebServer procedures
 
-/* 
-// if email required include this section
-#if defined(ESP8266) 
-    #include gmail_esp8266.h
-#elif defined(ESP32) 
-    #include gmail_esp32.h
+#if ENABLE_OTA
+  #include "ota.h"                           // Over The Air updates (OTA)
 #endif
-*/
 
-// #include "gmail.h"        // Code for sending emails via gmail (include if email is required) - problem using with esp32???
 
+//// if email required include this section
+//#if defined(ESP8266) 
+//    #include gmail_esp8266.h
+//#elif defined(ESP32) 
+//    #include gmail_esp32.h
+//#endif
 
   
 // ---------------------------------------------------------------
@@ -93,8 +99,8 @@ unsigned long LEDtimer = millis();           // used for flashing the LED
 void setup(void) {
     
   Serial.begin(115200);
-  Serial.setTimeout(2000);
-  while(!Serial) { }        // Wait for serial to initialize.
+//  Serial.setTimeout(2000);
+//  while(!Serial) { }        // Wait for serial to initialize.
 
   Serial.println(F("\n\n\n---------------------------------------"));
   Serial.println("Starting - " + stitle + " - " + sversion);
@@ -118,6 +124,11 @@ void setup(void) {
     // pinMode(onboardButton, INPUT); 
 
   startWifiManager();                                            // Connect to wifi (procedure is in wifi.h)
+
+  // start MDNS - see https://tttapa.github.io/ESP8266/Chap08%20-%20mDNS.html
+  if (MDNS.begin(MDNStitle)) {
+    Serial.println("MDNS responder started");
+  }
   
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
@@ -139,6 +150,10 @@ void setup(void) {
     server.on("/reboot", handleReboot);      // reboot the esp
     server.onNotFound(handleNotFound);       // invalid page requested
 
+  #if ENABLE_OTA
+    otaSetup();    // Over The Air updates (OTA)
+  #endif
+  
   // start web server
     Serial.println(F("Starting web server"));
     server.begin();
@@ -174,8 +189,7 @@ void loop(void){
 
   // every 1.5 seconds change the LED status, check Wifi is connected and update time
   //          explanation of timing here: https://www.baldengineer.com/arduino-millis-plus-addition-does-not-add-up.html
-    unsigned long currentMillis = millis();        // get current time
-    if ((unsigned long)(currentMillis - LEDtimer) >= ledBlinkRate ) {   
+    if ((unsigned long)(millis() - LEDtimer) >= ledBlinkRate ) {   
       digitalWrite(led, !digitalRead(led));        // invert led status
       WIFIcheck();                                 // check if wifi connection is ok
       LEDtimer = millis();                         // reset timer
@@ -223,14 +237,14 @@ void handleRoot() {
 
   // build the HTML code 
   
-    String message = webheader(0);                                      // add the standard html header
-    message += "<FORM action='/' method='post'>\n";                       // used by the buttons (action = the page send it to)
-    message += "<P>";                                                   // start of section
+    String message = webheader();                                      // add the standard html header
+    message += "<FORM action='" + HomeLink + "' method='post'>\n";     // used by the buttons (action = the page send it to)
+    message += "<P>";                                                  // start of section
 
     
     message += "Welcome to the demo " + ESPType + " web page\n";
 
-    // insert an iframe containing the changing data (updates every few seconds using java script)
+    // insert an iframe containing the changing data (updates every few seconds using javascript)
        message += "<BR><iframe id='dataframe' height=150; width=600; frameborder='0';></iframe>\n"
       "<script type='text/javascript'>\n"
          "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n"
@@ -306,7 +320,7 @@ void handleTest(){
   log_system_message("Testing page requested");      
 
 
-  String message = webheader(0);                                      // add the standard html header
+  String message = webheader();           // add the standard html header
 
   message += "<BR>Testing page<BR><BR>\n";
 

@@ -1,17 +1,17 @@
 /**************************************************************************************************
  *
- *                                 Standard procedures - 30Jan20
+ *                                 Standard procedures - 05Feb20
  *             
  *  
  **************************************************************************************************/
 
 // forward declarations
-  void log_system_message();
-  String webheader();
+  void log_system_message(String);
+  String webheader(uint16_t);
   String webfooter();
   void handleLogpage();
   void handleNotFound();
-  String requestpage();
+  String requestpage(const char*, String, uint16_t);
   void handleReboot();
   void WIFIcheck();
 
@@ -60,7 +60,7 @@ void log_system_message(String smes) {
 //    more info on html here - https://randomnerdtutorials.com/esp8266-web-server/
 
 
-String webheader(int refresh) {
+String webheader(uint16_t refresh = 0) {
 
     if ( (refresh < 0) || (refresh > 1000) ) refresh = 0;      // verify valid refresh rate
 
@@ -110,10 +110,14 @@ String webfooter(void) {
       
              "<br>\n" 
              
-           /* Status display at bottom of screen */
+             /* Status display at bottom of screen */
              "<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n" 
                 "<small>" + red + 
-                  stitle + " " + sversion + " | Memory:" + String(ESP.getFreeHeap()) + " | Wifi: " + String(WiFi.RSSI()) + "dBm" + " | " + NTPtext + 
+                    stitle + " " + sversion + 
+                    " | Memory:" + String(ESP.getFreeHeap()) + 
+                    " | Wifi: " + String(WiFi.RSSI()) + "dBm" 
+                    " | " + NTPtext +
+                    // " | Free Spiffs:" + (SPIFFS.totalBytes() - SPIFFS.usedBytes()) +  
                 endcolour + "</small>\n" 
              "</div>\n" 
                
@@ -137,7 +141,7 @@ void handleLogpage() {
 
     // build the html for /log page
 
-    String message = webheader(0);     // add the standard header
+    String message = webheader();     // add the standard header
 
       message += "<P>\n";                // start of section
   
@@ -197,7 +201,7 @@ void handleNotFound() {
 //     parameters = ip address, page to request, port to use (usually 80)     e.g.   "alanesq.com","/index.htm",80
 
 
-String requestpage(const char* ip, String page, int port){
+String requestpage(const char* ip, String page, uint16_t port){
 
   Serial.print("requesting web page: ");
   Serial.println(ip + page);
@@ -221,7 +225,7 @@ String requestpage(const char* ip, String page, int port){
     Serial.println("Request sent - waiting for reply...");
   
     //Wait up to 5 seconds for server to respond then read response
-    int i = 0;
+    uint16_t i = 0;
     while ((!client.available()) && (i < 500)) {
       delay(10);
       i++;
