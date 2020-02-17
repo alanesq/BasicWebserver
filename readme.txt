@@ -9,8 +9,6 @@ It is not all my own work, just something I have put together for my own use fro
 It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity and 
 a clock (using NTP)
 
-To compile this app the BasicWebServer.ino file along with all the .h files need to be in a folder named "BasicWebServer".
-If you wish to use the email facility you need to enter your email details in gmail_esp.h and note the security settings may need changing on the gmail account.  There is a zip file containing the libraries used by this sketch.
 
 The sketch as it is will first create a wifi access point named "ESPconfig", you need to connect to this with the 
 password "password" and you will then be able to enter your wifi network details so it is then able to connect to it 
