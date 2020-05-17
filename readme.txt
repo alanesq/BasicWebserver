@@ -28,6 +28,9 @@ Note: I have updated this sketch to use newer versions of libraries so if you ha
 
 It now suports OTA updates (this can be disabled in the settings if preferred)
       You can upload a bin file from the web browser at   i.e. http://x.x.x.x/ota
-      Note - Anyone with access to your device could upload their own code using this.
+
+      Note - As at least some basic form of security you need to enter a password to enable ota
+             Activate OTA with   http://<esp ip address>?pwd=12345678
+             Then access with    http://<esp ip address>/ota
 
 
