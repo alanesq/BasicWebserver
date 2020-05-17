@@ -11,7 +11,7 @@ a clock (using NTP)
 
 
 The sketch as it is will first create a wifi access point named "ESPconfig", you need to connect to this with the 
-password "password" and you will then be able to enter your wifi network details so it is then able to connect to it 
+password "12345678" and you will then be able to enter your wifi network details so it is then able to connect to it 
 (it uses the WifiManager library to do this which is included in the above file).  Once connected to your network you 
 should be able to view a similar web page to the image above (you will need to find out what ip address it is using from 
 your router or by viewing the terminal window in the Arduino IDE).
