@@ -27,5 +27,7 @@ Note: I have updated this sketch to use newer versions of libraries so if you ha
       need to update your libraries.
 
 It now suports OTA updates (this can be disabled in the settings if preferred)
+      You can upload a bin file from the web browser at   i.e. http://x.x.x.x/ota
+      Note - Anyone with access to your device could upload their own code using this.
 
 
