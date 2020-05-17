@@ -1,4 +1,4 @@
-                    BasicWebServer - alanesq@disroot.org - Feb2020
+                    BasicWebServer - alanesq@disroot.org - May2020
                     ==============================================
 
 I find that when creating pretty much any new project with an ESP8266 or ESP32 I use this sketch as a starting point, 
@@ -27,9 +27,7 @@ Note: I have updated this sketch to use newer versions of libraries so if you ha
       need to update your libraries.
 
 It now suports OTA updates (this can be disabled in the settings if preferred)
-      You can upload a bin file from the web browser at   i.e. http://x.x.x.x/ota
-
-      Note - As at least some basic form of security you need to enter a password to enable ota
+      Note - As at least some basic form of security you first need to enter a password to enable ota
              Activate OTA with   http://<esp ip address>?pwd=12345678
              Then access with    http://<esp ip address>/ota
 
