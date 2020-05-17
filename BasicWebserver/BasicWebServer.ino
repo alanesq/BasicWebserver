@@ -40,14 +40,15 @@
 // ---------------------------------------------------------------
 
 
-  #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
-  
   const String stitle = "BasicWebServer";                // title of this sketch
 
-  const String sversion = "16Feb20";                     // version of this sketch
+  const String sversion = "17May20";                     // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
   
+  #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
+  const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
+
   const String HomeLink = "/";                           // Where home button on web pages links to (usually "/")
 
   const uint16_t datarefresh = 3000;                     // Refresh rate of the updating data on web page (1000 = 1 second)
@@ -68,7 +69,18 @@
   
 
 // ---------------------------------------------------------------
+  
 
+  // Debugging tool
+  // use with:    TRACE();    or    DUMP(someValue);
+  
+  // #include <ArduinoTrace.h>
+  
+
+// ---------------------------------------------------------------
+
+
+bool OTAEnabled = 0;                    // flag if OTA has been enabled (via supply of password)
 
 uint32_t LEDtimer = millis();           // used for flashing the LED
   
@@ -106,6 +118,7 @@ void setup(void) {
   Serial.println("Starting - " + stitle + " - " + sversion);
   Serial.println(F("---------------------------------------"));
   Serial.println( "ESP type: " + ESPType );
+  // Serial.println(ESP.getFreeSketchSpace());
   #if defined(ESP8266)     
     Serial.println("Chip ID: " + ESP.getChipId());
     rst_info *rinfo = ESP.getResetInfoPtr();
@@ -149,10 +162,6 @@ void setup(void) {
     server.on("/test", handleTest);          // testing page
     server.on("/reboot", handleReboot);      // reboot the esp
     server.onNotFound(handleNotFound);       // invalid page requested
-
-  #if ENABLE_OTA
-    otaSetup();    // Over The Air updates (OTA)
-  #endif
   
   // start web server
     Serial.println(F("Starting web server"));
@@ -210,6 +219,18 @@ void handleRoot() {
 
 
   // action any button presses etc.
+
+  #if ENABLE_OTA
+  // enable OTA if password supplied in url parameters   (?pass=xxx)
+    if (server.hasArg("pwd")) {
+        String Tvalue = server.arg("pwd");   // read value
+          if (Tvalue == OTAPassword) {
+            otaSetup();    // Over The Air updates (OTA)
+            log_system_message("OTA enabled");
+            OTAEnabled = 1;
+          }
+    }
+  #endif
 
     // if demo radio button "RADIO1" was selected 
       if (server.hasArg("RADIO1")) {
@@ -295,7 +316,10 @@ void handleData(){
       
       
   message += "<BR>Auto refreshing information goes here\n";
-  message += "<BR>" + currentTime() + "<BR>\n";      // show current time
+  message += "<BR>" + currentTime() + "\n";      // show current time
+
+  // OTA enabled status
+    if (OTAEnabled) message += red + "<BR>OTA ENABLED!" + endcolour;
 
 
 

@@ -1,13 +1,13 @@
 /**************************************************************************************************
  *
- *                                 Standard procedures - 05Feb20
+ *                                 Standard procedures - 17May20
  *             
  *  
  **************************************************************************************************/
 
 // forward declarations
   void log_system_message(String);
-  String webheader(uint16_t);
+  String webheader(String);
   String webfooter();
   void handleLogpage();
   void handleNotFound();
@@ -54,15 +54,11 @@ void log_system_message(String smes) {
 // ----------------------------------------------------------------
 //                         -header (html) 
 // ----------------------------------------------------------------
-
 // HTML at the top of each web page
-//    refresh = how often to auto refresh the page in seconds  (not usually used as javascript is a better option)
-//    more info on html here - https://randomnerdtutorials.com/esp8266-web-server/
+//    additional style settings can be included
 
 
-String webheader(uint16_t refresh = 0) {
-
-    if ( (refresh < 0) || (refresh > 1000) ) refresh = 0;      // verify valid refresh rate
+String webheader(String style = "") {
 
     String message = 
       "<!DOCTYPE html>\n"
@@ -70,26 +66,23 @@ String webheader(uint16_t refresh = 0) {
          "<head>\n"
            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
            "<link rel=\'icon\' href=\'data:,\'>\n"
-           "<title>" + stitle + "</title>\n";
-           // Auto refresh page if requested
-              if (refresh > 0) message += "<meta http-equiv='refresh' content='" + String(refresh) + "' />\n";
-              message +=
+           "<title>" + stitle + "</title>\n"
            "<style>\n"                             /* Settings here for the top of screen menu appearance */
              "ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);}\n"
              "li {float: left;}\n"
              "li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n"
-             "li a:hover { background-color: rgb(100, 0, 0);}\n"
+             "li a:hover { background-color: rgb(100, 0, 0);}\n" 
+             + style + "\n"
            "</style>\n"
          "</head>\n"
          "<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n"
            "<ul>\n"                  
-             "<li><a href='" + HomeLink + "'>Home</a></li>\n"                      /* home menu button */
-             "<li><a href='/log'>Log</a></li>\n"                    /* log menu button */
-             "<h1>" + red + stitle + endcolour + "</h1>\n"          /* display the project title in red */
+             "<li><a href='" + HomeLink + "'>Home</a></li>\n"        /* home menu button */
+             "<li><a href='/log'>Log</a></li>\n"                     /* log menu button */
+             "<h1>" + red + stitle + endcolour + "</h1>\n"           /* display the project title in red */
            "</ul>\n";
 
     return message;
-    
 }
 
 
@@ -114,10 +107,11 @@ String webfooter(void) {
              "<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n" 
                 "<small>" + red + 
                     stitle + " " + sversion + 
-                    " | Memory:" + String(ESP.getFreeHeap()) + 
+                    " | Memory:" + String(ESP.getFreeHeap() /1000) + "K" + 
                     " | Wifi: " + String(WiFi.RSSI()) + "dBm" 
-                    " | " + NTPtext +
-                    // " | Free Spiffs:" + (SPIFFS.totalBytes() - SPIFFS.usedBytes()) +  
+                    " | " + NTPtext + 
+                    // " | Spiffs:" + String( (SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000) ) + "K" +  
+                    // " | MAC: " + String( WiFi.macAddress() )  + 
                 endcolour + "</small>\n" 
              "</div>\n" 
                

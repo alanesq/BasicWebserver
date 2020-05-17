@@ -1,18 +1,19 @@
 /**************************************************************************************************
  *  
- *                                Over The Air updates (OTA) - 16Feb20 
+ *                                Over The Air updates (OTA) - 17May20 
  * 
  *                                   part of the Webserver library
  *                                   
  *                 In Arduino IDE Select "ESP32 dev module" not ESP32-cam, PSRAM enabled
  *                     
- *                              access with  http://<esp ip address>/ota
  * 
  **************************************************************************************************
 
-    WARNING: This is not secure, anyone with access to your wifi can upload their own sketch !
 
     To enable/disable OTA see setting at top of main sketch (#define ENABLE_OTA 1)
+
+    Activate OTA with   http://<esp ip address>?pwd=12345678
+    Then access with    http://<esp ip address>/ota
 
  
  **************************************************************************************************/
@@ -102,11 +103,6 @@ void otaSetup() {
 
 }
 
-
-// ----------------------------------------------------------------
-//      -OTA web page requested     i.e. http://x.x.x.x/ota
-// ----------------------------------------------------------------
-
 void handleOTA(){
 
   log_system_message("OTA web page requested");      
@@ -119,13 +115,14 @@ void handleOTA(){
   message += "<input type='file' style='width: 300px' name='update'>\n";
   message += "<BR><BR><input type='submit' value='Update'></form><BR>\n";
 
-  message += "<BR><BR>Device will reboot when upload complete<BR>";
+  message += "<BR><BR>Device will reboot when upload complete";
+  message += red + "<BR>OTA is enabled - Restart device to disable<BR>" + endcolour;
+
                           
   message += webfooter();     // add standard footer html
   
   server.send(200, "text/html", message);    // send the web page
   message = "";      // clear string
-  
 }
 
 // ---------------------------------------------- end ----------------------------------------------
