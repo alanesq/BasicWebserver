@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *                                 Standard procedures - 17May20
+ *                                 Standard procedures - 05Sep20
  *             
  *  
  **************************************************************************************************/
@@ -131,31 +131,39 @@ String webfooter(void) {
 
 void handleLogpage() {
 
-   log_system_message("log webpage requested");     
+  WiFiClient client = server.client();                                                        // open link with client
+  String tstr;                                                                                // temp store for building line of html
+  client.write(webheader().c_str());   // html page header  (with extra formatting)
+
+  // log page request including clients IP address
+      IPAddress cip = client.remoteIP();
+      log_system_message("Root page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));    
+
 
     // build the html for /log page
 
-    String message = webheader();     // add the standard header
-
-      message += "<P>\n";                // start of section
+      client.write("<P>\n");                // start of section
   
-      message += "<br>SYSTEM LOG<br><br>\n";
+      client.write("<br>SYSTEM LOG<br><br>\n");
   
       // list all system messages
       for (int i=LogNumber; i != 0; i--){
-        message += system_message[i];
+        client.write(system_message[i].c_str());
         if (i == LogNumber) {
-          message += red + "  <-- most recent" + endcolour;
+          tstr = red + "  <-- most recent" + endcolour;
+          client.write(tstr.c_str());
         }
-        message += "<BR>\n";    // new line
+        client.write("<BR>\n");    // new line
       }
   
-      // message += "<a href='/'>BACK TO MAIN PAGE</a>\n";       // link back to root page
+      // client.write("<a href='/'>BACK TO MAIN PAGE</a>\n");       // link back to root page
   
-      message += "<br>" + webfooter();     // add standard footer html
+      client.write("<br>");
     
-
-    server.send(200, "text/html", message);    // send the web page
+      // close html page
+        client.write(webfooter().c_str());                          // html page footer
+        delay(3);
+        client.stop();
 
 }
 

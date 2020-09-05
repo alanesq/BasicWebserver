@@ -10,7 +10,7 @@
  *  set the following option:     Allow less secure apps: ON       
  *                                see:  https://myaccount.google.com/lesssecureapps
  *
- *                                        Gmail - v2.0  - 24Jan20          
+ *                                        Gmail - v2.0  - 05Sep20         
  *  
  **************************************************************************************************
 

@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *                                Over The Air updates (OTA) - 17May20 
+ *                                Over The Air updates (OTA) - 05Sep20
  * 
  *                                   part of the Webserver library
  *                                   
@@ -8,7 +8,6 @@
  *                     
  * 
  **************************************************************************************************
-
 
     To enable/disable OTA see setting at top of main sketch (#define ENABLE_OTA 1)
 
@@ -73,8 +72,10 @@ void otaSetup() {
     #if defined ESP8266
         server.on("/update", HTTP_POST, []() {
           server.sendHeader("Connection", "close");
-          server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+          server.send(200, "text/plain", (Update.hasError()) ? "Update Failed!, rebooting" : "Update complete, device is rebooting...");
+          delay(500);
           ESP.restart();
+          delay(2000);
         }, []() {
           HTTPUpload& upload = server.upload();
           if (upload.status == UPLOAD_FILE_START) {
@@ -105,24 +106,32 @@ void otaSetup() {
 
 void handleOTA(){
 
-  log_system_message("OTA web page requested");      
-   String message = webheader();
+  WiFiClient client = server.client();          // open link with client
+  String tstr;                                  // temp store for building lines of html;
 
-  message += "<BR><H1>Update firmware</H1><BR>\n";
-  message += "Current version = " + stitle + ", " + sversion + "<BR><BR>";
+  client.write(webheader().c_str());            // add the standard html header
+
+  // log page request including clients IP address
+      IPAddress cip = client.remoteIP();
+      log_system_message("OTA web page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
+
+  client.write("<BR><H1>Update firmware</H1><BR>\n");
+  tstr = "Current version = " + stitle + ", " + sversion + "<BR><BR>";
+  client.write(tstr.c_str());
   
-  message += "<form method='POST' action='/update' enctype='multipart/form-data'>\n";
-  message += "<input type='file' style='width: 300px' name='update'>\n";
-  message += "<BR><BR><input type='submit' value='Update'></form><BR>\n";
+  client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
+  client.write("<input type='file' style='width: 300px' name='update'>\n");
+  client.write("<BR><BR><input type='submit' value='Update'></form><BR>\n");
 
-  message += "<BR><BR>Device will reboot when upload complete";
-  message += red + "<BR>OTA is enabled - Restart device to disable<BR>" + endcolour;
-
+  client.write("<BR><BR>Device will reboot when upload complete");
+  tstr = red + "<BR>To disable OTA restart device<BR>" + endcolour;
+  client.write(tstr.c_str());
                           
-  message += webfooter();     // add standard footer html
-  
-  server.send(200, "text/html", message);    // send the web page
-  message = "";      // clear string
+  // close html page
+    client.write(webfooter().c_str());                      // add the standard web page footer
+    delay(3);
+    client.stop();
+    
 }
 
 // ---------------------------------------------- end ----------------------------------------------

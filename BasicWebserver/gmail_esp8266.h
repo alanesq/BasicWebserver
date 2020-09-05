@@ -11,7 +11,7 @@
  *  set the following option:     Allow less secure apps: ON       
  *                                see:  https://myaccount.google.com/lesssecureapps
  *
- *                                        Gmail - v2.0  - 04Jan20          
+ *                                        Gmail - v2.0  - 05Sep20          
  *  
  **************************************************************************************************
 
@@ -39,11 +39,13 @@
 
 //               s e t t i n g s 
 
-  char* emailReceiver = "<email to send to>";         // address to send emails
+  const String emailReceiver = "<enter the email address to send to>";         // address to send emails
+
+  const String _mailUser = "<enter the email address to send from>";
   
-  char* _mailUser = "<email to send from>";
-  
-  char* _mailPassword = "<email password>";
+  const String _mailPassword = "<enter the email password>";
+
+  const String _SMTP = "smtp.gmail.com";
   
   
 

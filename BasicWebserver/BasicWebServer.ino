@@ -42,7 +42,7 @@
 
   const String stitle = "BasicWebServer";                // title of this sketch
 
-  const String sversion = "17May20";                     // version of this sketch
+  const String sversion = "05Sep20";                     // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
   
@@ -213,9 +213,15 @@ void loop(void){
 //       -root web page requested    i.e. http://x.x.x.x/
 // ----------------------------------------------------------------
 
-void handleRoot() {
+void handleRoot() {  
 
-  log_system_message("root webpage requested");     
+  WiFiClient client = server.client();             // open link with client
+  String tstr;                                     // temp store for building line of html
+  client.write(webheader("").c_str());             // html page header  (with extra formatting)
+
+  // log page request including clients IP address
+    IPAddress cip = client.remoteIP();
+    log_system_message("Root page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
 
 
   // action any button presses etc.
@@ -258,43 +264,44 @@ void handleRoot() {
 
   // build the HTML code 
   
-    String message = webheader();                                      // add the standard html header
-    message += "<FORM action='" + HomeLink + "' method='post'>\n";     // used by the buttons (action = the page send it to)
-    message += "<P>";                                                  // start of section
+    tstr = "<FORM action='" + HomeLink + "' method='post'>\n";     // used by the buttons (action = the page send it to)
+    client.write(tstr.c_str());
+    client.write("<P>");                                           // start of section
 
-    
-    message += "Welcome to the demo " + ESPType + " web page\n";
+    tstr = "Welcome to the demo " + ESPType + " web page\n";
+    client.write(tstr.c_str());
 
     // insert an iframe containing the changing data (updates every few seconds using javascript)
-       message += "<BR><iframe id='dataframe' height=150; width=600; frameborder='0';></iframe>\n"
-      "<script type='text/javascript'>\n"
-         "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n"
-         "window.setInterval(function() {document.getElementById('dataframe').src='/data';}, " + String(datarefresh) + ");\n"
-      "</script>\n"; 
+      client.write("<BR><iframe id='dataframe' height=150; width=600; frameborder='0';></iframe>\n");
+      client.write("<script type='text/javascript'>\n");
+      tstr = "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n";
+      client.write(tstr.c_str());
+      tstr = "window.setInterval(function() {document.getElementById('dataframe').src='/data';}, " + String(datarefresh) + ");\n";
+      client.write(tstr.c_str());
+      client.write("</script>\n"); 
 
     // demo radio buttons - "RADIO1"
-      message += "<BR>Demo radio buttons\n";
-      message += "<BR>Radio1 button1\n";                                 // radio button 1
-      message += "<INPUT type='radio' name='RADIO1' value='1'>\n";
-      message += "<BR>Radio1 button2\n";                                 // radio button 2
-      message += "<INPUT type='radio' name='RADIO1' value='2'>\n";
-      message += "<BR><INPUT type='reset'>\n";                           // reset radio button 
-      message += "<INPUT type='submit' value='Action'>\n";                // action button
+      client.write("<BR>Demo radio buttons\n");
+      client.write("<BR>Radio1 button1\n");                                  // radio button 1
+      client.write("<INPUT type='radio' name='RADIO1' value='1'>\n");
+      client.write("<BR>Radio1 button2\n");                                  // radio button 2
+      client.write("<INPUT type='radio' name='RADIO1' value='2'>\n");
+      client.write("<BR><INPUT type='reset'>\n");                            // reset radio button 
+      client.write("<INPUT type='submit' value='Action'>\n");                // action button
 
     // demo standard button 
     //    'name' is what is tested for above to detect when button is pressed, 'value' is the text displayed on the button
-      message += "<BR><BR><input style='"; 
-      // if ( x == 1 ) message += "background-color:red; ";      // to change button color depending on state
-      message += "height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n";
+      client.write("<BR><BR><input style='"); 
+      // if ( x == 1 ) client.write("background-color:red; ");      // to change button color depending on state
+      client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
 
-
-
-    message += "</span></P>\n";    // end of section    
-    message += webfooter();      // add the standard footer
-
-    server.send(200, "text/html", message);      // send the web page
-    message = "";      // clear variable
+    client.write("</span></P>\n");    // end of section    
+  
+    // close html page
+      client.write(webfooter().c_str());                                                          // html page footer
+      delay(3);
+      client.stop();
 
 }
 
@@ -307,29 +314,31 @@ void handleRoot() {
 
 void handleData(){
 
-  String message = 
-      "<!DOCTYPE HTML>\n"
-      "<html><body>\n";
-      // "<meta http-equiv='refresh' content='3' />\n";      // no longer used as now done with java script
+  WiFiClient client = server.client();          // open link with client
+  String tstr;                                  // temp store for building lines of html;
 
-      
-      
-      
-  message += "<BR>Auto refreshing information goes here\n";
-  message += "<BR>" + currentTime() + "\n";      // show current time
+  client.write("<!DOCTYPE HTML>\n");
+  client.write("<html><body>\n"); 
+
+  client.write("<BR>Auto refreshing information goes here\n");
+  tstr = "<BR>" + currentTime() + "\n";   
+  client.write(tstr.c_str());
 
   // OTA enabled status
-    if (OTAEnabled) message += red + "<BR>OTA ENABLED!" + endcolour;
+    if (OTAEnabled) {
+       tstr = red + "<BR>OTA ENABLED!" + endcolour;
+       client.write(tstr.c_str());
+    }
 
 
 
   
   
   
-  message += "</body></htlm>\n";
-  
-  server.send(200, "text/html", message);   // send reply as plain text
-  message = "";      // clear variable
+  // close html page
+    client.write("</body></htlm>\n");
+    delay(3);
+    client.stop();
   
 }
 
@@ -341,33 +350,28 @@ void handleData(){
 
 void handleTest(){
 
-  log_system_message("Testing page requested");      
+  WiFiClient client = server.client();          // open link with client
 
-
-  String message = webheader();           // add the standard html header
-
-  message += "<BR>Testing page<BR><BR>\n";
-
-
-
-  // test section here
-
+  // log page request including clients IP address
+      IPAddress cip = client.remoteIP();
+      log_system_message("Test page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
   
-//        // send email
-//          String emessage = "Test email";
-//          byte q = sendEmail(emailReceiver,"Message from BasicWebServer sketch", emessage);    
-//          if (q==0) log_system_message("email sent ok" );
-//          else log_system_message("Error sending email code=" + String(q) );
+  client.write(webheader().c_str());                // add the standard html header
+  client.write("<BR>TEST PAGE<BR><BR>\n");
 
-        
+  // ---------------------------- test section here ------------------------------
 
 
-  
-  message += webfooter();                                             // add the standard footer
 
-    
-  server.send(200, "text/html", message);      // send the web page
-  message = "";      // clear variable
+
+       
+  // -----------------------------------------------------------------------------
+
+  // end html page
+    client.write(webfooter().c_str());            // add the standard web page footer
+    delay(1);
+    client.stop();
+
   
 }
 
