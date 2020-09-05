@@ -7,6 +7,7 @@ It is not all my own work, just something I have put together for my own use fro
 
 It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity and 
 a clock (using NTP)
+BTW - This sketch will automatically adjust to running on either a ESP8266 or a ESP32
 
 <table><tr>
   <td><img src="/Images/Screenshot1.png" /></td>
