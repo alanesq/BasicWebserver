@@ -39,13 +39,13 @@
 
 //               s e t t i n g s 
 
-  const String emailReceiver = "<enter the email address to send to>";         // address to send emails
+  char* emailReceiver = "<enter the email address to send to>";         // address to send emails
 
-  const String _mailUser = "<enter the email address to send from>";
+  char*  _mailUser = "<enter the email address to send from>";
   
-  const String _mailPassword = "<enter the email password>";
+  char* _mailPassword = "<enter the email password>";
 
-  const String _SMTP = "smtp.gmail.com";
+  char* _SMTP = "smtp.gmail.com";
   
   
 
