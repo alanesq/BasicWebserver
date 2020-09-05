@@ -27,8 +27,9 @@ but I think the simplest).
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
 
-Note: I have updated this sketch to use newer versions of libraries so if you have an older version you will
-      need to update your libraries.
+The libraries used by the sketch are in a "libraries used.zip" (copy them in to your libraries folder).
+Note: I have recently updated this sketch to use newer versions of libraries so if you have an older version you will
+      need to update your installed libraries.
 
 It now suports OTA updates (this can be disabled in the settings if preferred)
       Note - As at least some basic form of security you first need to enter a password to enable ota
