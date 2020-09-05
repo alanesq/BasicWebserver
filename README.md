@@ -1,6 +1,6 @@
                     BasicWebServer - alanesq@disroot.org - Sep20
                     ============================================
-
+                    
 I find that when creating pretty much any new project with an ESP8266 or ESP32 I use this sketch as a starting point, 
 so I have published it here in case it is of any use/interest to anyone else (I also hope that people will offer 
 improvements/suggestions as I am not a professional programmer by any stretch of the imagination).  
@@ -9,6 +9,7 @@ It is not all my own work, just something I have put together for my own use fro
 It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity and 
 a clock (using NTP)
 
+<img src="/Screenshot1.png" width="60%"/>
 
 The sketch as it is will first create a wifi access point named "ESPconfig", you need to connect to this with the 
 password "12345678" and you will then be able to enter your wifi network details so it is then able to connect to it 
