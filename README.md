@@ -1,5 +1,4 @@
-                    BasicWebServer - alanesq@disroot.org - Sep20
-                    ============================================
+<img src="/Images/BasicWebserver.jpg" />
                     
 I find that when creating pretty much any new project with an ESP8266 or ESP32 I use this sketch as a starting point, 
 so I have published it here in case it is of any use/interest to anyone else (I also hope that people will offer 
@@ -10,8 +9,8 @@ It is the easiest way I have found to serve web pages with control buttons, upda
 a clock (using NTP)
 
 <table><tr>
-  <td><img src="/Screenshot1.png" /></td>
-  <td><img src="/Screenshot2.png" /></td>
+  <td><img src="/Images/Screenshot1.png" /></td>
+  <td><img src="/Images/Screenshot2.png" /></td>
 </tr></table>   
 
 The sketch as it is will first create a wifi access point named "ESPconfig", you need to connect to this with the 
