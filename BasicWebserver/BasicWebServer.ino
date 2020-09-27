@@ -118,9 +118,9 @@ void setup(void) {
 //  Serial.setTimeout(2000);
 //  while(!Serial) { }        // Wait for serial to initialize.
 
-  Serial.println(F("\n\n\n---------------------------------------"));
+  Serial.println("\n\n\n---------------------------------------");
   Serial.println("Starting - " + stitle + " - " + sversion);
-  Serial.println(F("---------------------------------------"));
+  Serial.println("---------------------------------------");
   Serial.println( "ESP type: " + ESPType );
   // Serial.println(ESP.getFreeSketchSpace());
   #if defined(ESP8266)     
@@ -149,7 +149,7 @@ void setup(void) {
   
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
-    //    Serial.println(F("starting access point"));
+    //    Serial.println("starting access point");
     //    WiFi.softAP("ESP-AP", "password");               // access point settings (Note: password must be 8 characters for some reason)
     //    WiFi.mode(WIFI_AP_STA);                          // enable as both Station and access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    IPAddress myIP = WiFi.softAPIP();
@@ -169,7 +169,7 @@ void setup(void) {
     server.onNotFound(handleNotFound);       // invalid page requested
   
   // start web server
-    Serial.println(F("Starting web server"));
+    Serial.println("Starting web server");
     server.begin();
 
   // Finished connecting to network
@@ -277,7 +277,7 @@ void handleRoot() {
     client.write(tstr.c_str());
 
     // insert an iframe containing the changing data (updates every few seconds using javascript)
-      client.write("<BR><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
+      client.write("<br><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
       client.write("<script>\n");
       tstr = "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n";
       client.write(tstr.c_str());
@@ -286,17 +286,17 @@ void handleRoot() {
       client.write("</script>\n"); 
 
     // demo radio buttons - "RADIO1"
-      client.write("<BR>Demo radio buttons\n");
-      client.write("<BR>Radio1 button1\n");                                  // radio button 1
+      client.write("<br>Demo radio buttons\n");
+      client.write("<br>Radio1 button1\n");                                  // radio button 1
       client.write("<INPUT type='radio' name='RADIO1' value='1'>\n");
-      client.write("<BR>Radio1 button2\n");                                  // radio button 2
+      client.write("<br>Radio1 button2\n");                                  // radio button 2
       client.write("<INPUT type='radio' name='RADIO1' value='2'>\n");
-      client.write("<BR><INPUT type='reset'>\n");                            // reset radio button 
+      client.write("<br><INPUT type='reset'>\n");                            // reset radio button 
       client.write("<INPUT type='submit' value='Action'>\n");                // action button
 
     // demo standard button 
     //    'name' is what is tested for above to detect when button is pressed, 'value' is the text displayed on the button
-      client.write("<BR><BR><input style='"); 
+      client.write("<br><br><input style='"); 
       // if ( x == 1 ) client.write("background-color:red; ");      // to change button color depending on state
       client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
@@ -326,13 +326,13 @@ void handleData(){
   client.write("<!DOCTYPE HTML>\n");
   client.write("<html lang='en'><head><title>data</title></head><body>\n"); 
 
-  client.write("<BR>Auto refreshing information goes here\n");
-  tstr = "<BR>" + currentTime() + "\n";   
+  client.write("<br>Auto refreshing information goes here\n");
+  tstr = "<br>" + currentTime() + "\n";   
   client.write(tstr.c_str());
 
   // OTA enabled status
     if (OTAEnabled) {
-       tstr = red + "<BR>OTA ENABLED!" + endcolour;
+       tstr = red + "<br>OTA ENABLED!" + endcolour;
        client.write(tstr.c_str());
     }
 
@@ -360,7 +360,7 @@ void handleTest(){
       log_system_message("Test page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
   
   client.write(webheader().c_str());                // add the standard html header
-  client.write("<BR>TEST PAGE<BR><BR>\n");
+  client.write("<br>TEST PAGE<br><br>\n");
 
   // ---------------------------- test section here ------------------------------
 

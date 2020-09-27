@@ -1,10 +1,10 @@
 /**************************************************************************************************
  *  
- *                                Over The Air updates (OTA) - 05Sep20
+ *      Over The Air updates (OTA) - 05Sep20
  * 
- *                                   part of the Webserver library
+ *      part of the Webserver library
  *                                   
- *                 In Arduino IDE Select "ESP32 dev module" not ESP32-cam, PSRAM enabled
+ *      In Arduino IDE Select "ESP32 dev module" not ESP32-cam, PSRAM enabled
  *                     
  * 
  **************************************************************************************************
@@ -115,16 +115,16 @@ void handleOTA(){
       IPAddress cip = client.remoteIP();
       log_system_message("OTA web page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
 
-  client.write("<BR><H1>Update firmware</H1><BR>\n");
-  tstr = "Current version = " + stitle + ", " + sversion + "<BR><BR>";
+  client.write("<br><H1>Update firmware</H1><br>\n");
+  tstr = "Current version = " + stitle + ", " + sversion + "<br><br>";
   client.write(tstr.c_str());
   
   client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
   client.write("<input type='file' style='width: 300px' name='update'>\n");
-  client.write("<BR><BR><input type='submit' value='Update'></form><BR>\n");
+  client.write("<br><br><input type='submit' value='Update'></form><br>\n");
 
-  client.write("<BR><BR>Device will reboot when upload complete");
-  tstr = red + "<BR>To disable OTA restart device<BR>" + endcolour;
+  client.write("<br><br>Device will reboot when upload complete");
+  tstr = red + "<br>To disable OTA restart device<br>" + endcolour;
   client.write(tstr.c_str());
                           
   // close html page

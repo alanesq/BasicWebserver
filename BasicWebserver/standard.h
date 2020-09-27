@@ -153,7 +153,7 @@ void handleLogpage() {
           tstr = red + "   most recent" + endcolour;
           client.write(tstr.c_str());
         }
-        client.write("<BR>\n");    // new line
+        client.write("<br>\n");    // new line
       }
   
       // client.write("<a href='/'>BACK TO MAIN PAGE</a>\n");       // link back to root page

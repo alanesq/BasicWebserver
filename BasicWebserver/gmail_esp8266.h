@@ -1,17 +1,17 @@
 /**************************************************************************************************
  * 
- *    Send emails from ESP8266 via Gmail    
+ *      Send emails from ESP8266 via Gmail    
  * 
- *    include in main sketch if sending emails is required with command     #include "gmail.h"
+ *      include in main sketch if sending emails is required with command     #include "gmail.h"
  *    
- *    uses: 'EmailSender' library     More info: https://www.mischianti.org/2019/09/10/send-email-with-esp8266-and-arduino/
+ *      uses: 'EmailSender' library     More info: https://www.mischianti.org/2019/09/10/send-email-with-esp8266-and-arduino/
  * 
  * 
- *  This demo sketch will fail at the Gmail login unless your Google account has
- *  set the following option:     Allow less secure apps: ON       
+ *      This demo sketch will fail at the Gmail login unless your Google account has
+ *      set the following option:     Allow less secure apps: ON       
  *                                see:  https://myaccount.google.com/lesssecureapps
  *
- *                                        Gmail - v2.0  - 05Sep20          
+ *                                            Gmail - v2.0  - 27Sep20          
  *  
  **************************************************************************************************
 
@@ -39,13 +39,11 @@
 
 //               s e t t i n g s 
 
-  char* emailReceiver = "<enter the email address to send to>";         // address to send emails
-
-  char*  _mailUser = "<enter the email address to send from>";
+  char* emailReceiver = "<your email address here>";         // address to send emails
   
-  char* _mailPassword = "<enter the email password>";
-
-  char* _SMTP = "smtp.gmail.com";
+  char* _mailUser = "<email address to send from here>";
+  
+  char* _mailPassword = "<email password here>";
   
   
 
@@ -61,7 +59,7 @@ EMailSender emailSend(_mailUser, _mailPassword);
 
 byte sendEmail(String emailTo, String emailSubject, String emailBody)
 {
-  Serial.println(F("\n----- sending an email -------"));
+  Serial.println("\n----- sending an email -------");
 
     EMailSender::EMailMessage message;
 
@@ -96,7 +94,7 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody)
       if (resp.code == "1") tresult=1;
       if (resp.code == "2") tresult=2;    
   
-  Serial.println(F("------ end of email send -----"));
+  Serial.println("------ end of email send -----");
   return tresult;
 
 }
