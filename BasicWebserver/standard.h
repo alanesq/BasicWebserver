@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *                                 Standard procedures - 05Sep20
+ *      Standard procedures - 27Sep20
  *             
  *  
  **************************************************************************************************/
@@ -62,7 +62,7 @@ String webheader(String style = "") {
 
     String message = 
       "<!DOCTYPE html>\n"
-      "<html>\n"
+      "<html lang='en'>\n"
          "<head>\n"
            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
            "<link rel=\'icon\' href=\'data:,\'>\n"
@@ -150,7 +150,7 @@ void handleLogpage() {
       for (int i=LogNumber; i != 0; i--){
         client.write(system_message[i].c_str());
         if (i == LogNumber) {
-          tstr = red + "  <-- most recent" + endcolour;
+          tstr = red + "   most recent" + endcolour;
           client.write(tstr.c_str());
         }
         client.write("<BR>\n");    // new line

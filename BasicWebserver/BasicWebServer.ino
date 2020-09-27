@@ -1,8 +1,9 @@
 /*******************************************************************************************************************
  *
- *             Basic web server For ESP8266/ESP32 using Arduino IDE 
+ *      Basic web server For ESP8266/ESP32 using Arduino IDE 
  *             
- *             Included files: gmail.h, standard.h, ota.h and wifi.h (gmail.h is optional)
+ *      Included files: gmail.h, standard.h, ota.h and wifi.h (gmailxxx.h is optional)
+ *             
  *             
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
  *      I have found to provide a basic web page displaying updating information, control buttons etc..
@@ -30,6 +31,9 @@
  *      to all the sources but let me know if I have missed anyone.
  *
  *                                                                               Created by: www.alanesq.eu5.net
+ *                                                                               
+ *        BasicWebserver is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the 
+ *        implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *      
  ********************************************************************************************************************/
 
@@ -42,7 +46,7 @@
 
   const String stitle = "BasicWebServer";                // title of this sketch
 
-  const String sversion = "05Sep20";                     // version of this sketch
+  const String sversion = "27Sep20";                     // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
   
@@ -153,6 +157,7 @@ void setup(void) {
     //    Serial.println(myIP);
   
   // WiFi.setSleepMode(WIFI_NONE_SLEEP);     // Stops wifi turning off (if on causes wifi to drop out randomly on esp8266 boards)
+  // WiFi.setSleep(false);                   // another possibility?
     
   // set up web page request handling
     server.on(HomeLink, handleRoot);         // root page
@@ -272,8 +277,8 @@ void handleRoot() {
     client.write(tstr.c_str());
 
     // insert an iframe containing the changing data (updates every few seconds using javascript)
-      client.write("<BR><iframe id='dataframe' height=150; width=600; frameborder='0';></iframe>\n");
-      client.write("<script type='text/javascript'>\n");
+      client.write("<BR><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
+      client.write("<script>\n");
       tstr = "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n";
       client.write(tstr.c_str());
       tstr = "window.setInterval(function() {document.getElementById('dataframe').src='/data';}, " + String(datarefresh) + ");\n";
@@ -296,10 +301,11 @@ void handleRoot() {
       client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
 
-    client.write("</span></P>\n");    // end of section    
+    client.write("</P>\n");    // end of section    
   
     // close html page
-      client.write(webfooter().c_str());                                                          // html page footer
+    client.write("</form>");                                                  // end form section (buttons)
+      client.write(webfooter().c_str());                                      // html page footer
       delay(3);
       client.stop();
 
@@ -318,7 +324,7 @@ void handleData(){
   String tstr;                                  // temp store for building lines of html;
 
   client.write("<!DOCTYPE HTML>\n");
-  client.write("<html><body>\n"); 
+  client.write("<html lang='en'><head><title>data</title></head><body>\n"); 
 
   client.write("<BR>Auto refreshing information goes here\n");
   tstr = "<BR>" + currentTime() + "\n";   
@@ -330,13 +336,10 @@ void handleData(){
        client.write(tstr.c_str());
     }
 
-
-
-  
-  
+    
   
   // close html page
-    client.write("</body></htlm>\n");
+    client.write("</body></html>\n");
     delay(3);
     client.stop();
   
