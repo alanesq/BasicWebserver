@@ -1,0 +1,14 @@
+
+boards: http://arduino.esp8266.com/stable/package_esp8266com_index.json, https://dl.espressif.com/dl/package_esp32_index.json
+
+Ubuntu problems:
+    if you get the error 'Serial' object has no attribute 'dtr' when uploading sketch
+       sudo pip install --ignore-installed pyserial
+
+    http://blog.markloiseau.com/2012/05/install-arduino-ubuntu/
+       sudo chmod a+rw /dev/ttyUSB0
+       sudo usermod -a -G dialout alan     
+
+    http://forum.arduino.cc/index.php?topic=49623.0
+       Try editing your Arduino preferences file (~/.arduino/preferences.txt)
+

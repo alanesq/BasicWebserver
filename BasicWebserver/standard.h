@@ -1,14 +1,14 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 27Sep20
+ *      Standard procedures - 30Sep20
  *             
  *  
  **************************************************************************************************/
 
 // forward declarations
   void log_system_message(String);
-  String webheader(String);
-  String webfooter();
+  void webheader();
+  void webfooter();
   void handleLogpage();
   void handleNotFound();
   String requestpage(const char*, String, uint16_t);
@@ -21,13 +21,14 @@
 //                              -Startup
 // ----------------------------------------------------------------
   
-// html text colour codes  
-  const String red = "<font color='#FF0000'>";           // red text
-  const String green = "<font color='#006F00'>";         // green text
-  const String blue = "<font color='#0000FF'>";          // blue text
-  const String endcolour = "</font>";                    // end coloured text
+// html text colour codes (should use sty
+  const char colRed[] = "<font color='#FF0000'>";           // red text
+  const char colGreen[] = "<font color='#006F00'>";         // green text
+  const char colblue[] = "<font color='#0000FF'>";          // blue text
+  const char colEnd[] = "</font>";                          // end coloured text
 
-String system_message[LogNumber + 1];                    // system log messages
+String system_message[LogNumber + 1];                       // system log messages
+
 
 
 
@@ -58,31 +59,34 @@ void log_system_message(String smes) {
 //    additional style settings can be included
 
 
-String webheader(String style = "") {
+void webheader(WiFiClient &client) {
 
-    String message = 
-      "<!DOCTYPE html>\n"
-      "<html lang='en'>\n"
-         "<head>\n"
-           "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
-           "<link rel=\'icon\' href=\'data:,\'>\n"
-           "<title>" + stitle + "</title>\n"
-           "<style>\n"                             /* Settings here for the top of screen menu appearance */
-             "ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);}\n"
-             "li {float: left;}\n"
-             "li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n"
-             "li a:hover { background-color: rgb(100, 0, 0);}\n" 
-             + style + "\n"
-           "</style>\n"
-         "</head>\n"
-         "<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n"
-           "<ul>\n"                  
-             "<li><a href='" + HomeLink + "'>Home</a></li>\n"        /* home menu button */
-             "<li><a href='/log'>Log</a></li>\n"                     /* log menu button */
-             "<h1>" + red + stitle + endcolour + "</h1>\n"           /* display the project title in red */
-           "</ul>\n";
+      client.write("<!DOCTYPE html>\n");
+      client.write(  "<html lang='en'>\n");
+      client.write(     "<head>\n");
+      client.write(       "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
+      client.write(       "<link rel=\'icon\' href=\'data:,\'>\n");
+      client.write(       "<title>");
+      client.write(stitle);                    // sketch title
+      client.write("      </title>\n");
+      client.write(       "<style>\n");                             /* Settings here for the top of screen menu appearance */
+      client.write(         "ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);}\n");
+      client.write(         "li {float: left;}\n");
+      client.write(         "li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n");
+      client.write(         "li a:hover { background-color: rgb(100, 0, 0);}\n" );
+      client.write(       "</style>\n");
+      client.write(     "</head>\n");
+      client.write(     "<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n");
+      client.write(       "<ul>\n");
+      client.write(         "<li><a href='");
+      client.write(HomeLink);                  // home page url
+      client.write(         "'>Home</a></li>\n");        /* home menu button */
+      client.write(         "<li><a href='/log'>Log</a></li>\n");                     /* log menu button */
+      client.write(         "<h1> <font color='#FF0000'>");
+      client.write(stitle);                    // sketch title
+      client.write("</h1></font>\n");           /* display the project title in red */
+      client.write(       "</ul>\n");
 
-    return message;
 }
 
 
@@ -92,34 +96,32 @@ String webheader(String style = "") {
 // HTML at the end of each web page
 
 
-String webfooter(void) {
+void webfooter(WiFiClient &client) {
 
+     // get mac address
+       byte mac[6];
+       WiFi.macAddress(mac);
+     
+     client.write("<br>\n"); 
+     
+     /* Status display at bottom of screen */
+     client.write("<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n");
+     client.printf("<small> %s", colRed); 
+     client.printf("%s %s", stitle, sversion); 
+     client.printf(" | Memory: %dK", ESP.getFreeHeap() /1000); 
+     client.printf(" | Wifi: %ddBm", WiFi.RSSI()); 
      // NTP server link status
-            String NTPtext = "NTP Link "; 
-            if (NTPok == 1) NTPtext += "OK";
-            else NTPtext += "down";
+        if (NTPok == 1) client.write(" | NTP Link OK");
+        else client.write(" | NTP Link DOWN");
+     // client.printf(" | Spiffs: %dK", ( SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000 ) );             // if using spiffs 
+     // client.printf(" | MAC: %2x%2x%2x%2x%2x%2x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);       // mac address
+     client.printf("%s </small>\n", colEnd);
+     client.write("</div>\n"); 
+       
+   /* end of HTML */  
+     client.write("</body>\n");
+     client.write("</html>\n");
 
-      String message = 
-      
-             "<br>\n" 
-             
-             /* Status display at bottom of screen */
-             "<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n" 
-                "<small>" + red + 
-                    stitle + " " + sversion + 
-                    " | Memory:" + String(ESP.getFreeHeap() /1000) + "K" + 
-                    " | Wifi: " + String(WiFi.RSSI()) + "dBm" 
-                    " | " + NTPtext + 
-                    // " | Spiffs:" + String( (SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000) ) + "K" +  
-                    // " | MAC: " + String( WiFi.macAddress() )  + 
-                endcolour + "</small>\n" 
-             "</div>\n" 
-               
-           /* end of HTML */  
-             "</body>\n" 
-             "</html>\n";
-
-      return message;
 }
 
 
@@ -131,9 +133,7 @@ String webfooter(void) {
 
 void handleLogpage() {
 
-  WiFiClient client = server.client();                                                        // open link with client
-  String tstr;                                                                                // temp store for building line of html
-  client.write(webheader().c_str());   // html page header  (with extra formatting)
+  WiFiClient client = server.client();                     // open link with client
 
   // log page request including clients IP address
       IPAddress cip = client.remoteIP();
@@ -141,6 +141,8 @@ void handleLogpage() {
 
 
     // build the html for /log page
+
+      webheader(client);                    // html page header  
 
       client.write("<P>\n");                // start of section
   
@@ -150,18 +152,15 @@ void handleLogpage() {
       for (int i=LogNumber; i != 0; i--){
         client.write(system_message[i].c_str());
         if (i == LogNumber) {
-          tstr = red + "   most recent" + endcolour;
-          client.write(tstr.c_str());
+          client.printf("%s  {Most Recent Entry} %s", colRed, colEnd);          // build line of html
         }
         client.write("<br>\n");    // new line
       }
-  
-      // client.write("<a href='/'>BACK TO MAIN PAGE</a>\n");       // link back to root page
-  
+    
       client.write("<br>");
     
       // close html page
-        client.write(webfooter().c_str());                          // html page footer
+        webfooter(client);                          // html page footer
         delay(3);
         client.stop();
 

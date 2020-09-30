@@ -39,11 +39,11 @@
 
 //               s e t t i n g s 
 
-  char* emailReceiver = "<your email address here>";         // address to send emails
+  char* emailReceiver = "<email to send to>";         // address to send emails
   
-  char* _mailUser = "<email address to send from here>";
+  char* _mailUser = "<email to send from>";
   
-  char* _mailPassword = "<email password here>";
+  char* _mailPassword = "<email password>";
   
   
 

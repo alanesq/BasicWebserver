@@ -44,19 +44,19 @@
 // ---------------------------------------------------------------
 
 
-  const String stitle = "BasicWebServer";                // title of this sketch
+  const char stitle[] = "BasicWebServer";                // title of this sketch
 
-  const String sversion = "27Sep20";                     // version of this sketch
+  const char sversion[] = "30Sep20";                     // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
   
   #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
 
-  const String HomeLink = "/";                           // Where home button on web pages links to (usually "/")
+  const char HomeLink[] = "/";                           // Where home button on web pages links to (usually "/")
 
-  const uint16_t datarefresh = 3000;                     // Refresh rate of the updating data on web page (1000 = 1 second)
-  String JavaRefreshTime = "500";                        // time delay when loading url in web pages (Javascript)
+  const char datarefresh[] = "3000";                     // Refresh rate of the updating data on web page (1000 = 1 second)
+  const char JavaRefreshTime[] = "500";                  // time delay when loading url in web pages (Javascript)
   
   const byte LogNumber = 40;                             // number of entries to store in the system log
 
@@ -70,6 +70,8 @@
 
   const boolean ledON = LOW;                             // Status LED control 
   const boolean ledOFF = HIGH;
+
+  const int serialSpeed = 115200;                        // Serial data speed to use
   
 
 // ---------------------------------------------------------------
@@ -94,7 +96,7 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 #include "standard.h"                   // Standard BasicWebServer procedures
 
 #if ENABLE_OTA
-  #include "ota.h"                           // Over The Air updates (OTA)
+  #include "ota.h"                      // Over The Air updates (OTA)
 #endif
 
 
@@ -114,21 +116,21 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 
 void setup(void) {
     
-  Serial.begin(115200);
-//  Serial.setTimeout(2000);
-//  while(!Serial) { }        // Wait for serial to initialize.
+  Serial.begin(serialSpeed);                                   // serial port
 
-  Serial.println("\n\n\n---------------------------------------");
-  Serial.println("Starting - " + stitle + " - " + sversion);
-  Serial.println("---------------------------------------");
+  Serial.println("\n\n\n");                                    // line feeds
+  Serial.println("-----------------------------------");
+  Serial.printf("Starting - %s - %s \n", stitle, sversion);
+  Serial.println("-----------------------------------");
   Serial.println( "ESP type: " + ESPType );
   // Serial.println(ESP.getFreeSketchSpace());
   #if defined(ESP8266)     
     Serial.println("Chip ID: " + ESP.getChipId());
     rst_info *rinfo = ESP.getResetInfoPtr();
-    Serial.println(String("ResetInfo: ") + (*rinfo).reason + ": " + ESP.getResetReason());
+    Serial.println("ResetInfo: " + String((*rinfo).reason) + ": " + ESP.getResetReason());
     Serial.printf("Flash chip size: %d (bytes)\n", ESP.getFlashChipRealSize());
     Serial.printf("Flash chip frequency: %d (Hz)\n", ESP.getFlashChipSpeed());
+    Serial.printf("\n");
   #endif
   
   // Serial.setDebugOutput(true);                                // enable extra diagnostic info  
@@ -174,7 +176,7 @@ void setup(void) {
 
   // Finished connecting to network
     digitalWrite(led, ledOFF);
-    log_system_message(stitle + " Has Started");             
+    // log_system_message(stitle + " Has Started");             
 
 }
 
@@ -207,7 +209,7 @@ void loop(void){
       digitalWrite(led, !digitalRead(led));        // invert led status
       WIFIcheck();                                 // check if wifi connection is ok
       LEDtimer = millis();                         // reset timer
-      // time_t t=now();                              // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
+      time_t t=now();                              // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
     }
 
 } 
@@ -222,7 +224,7 @@ void handleRoot() {
 
   WiFiClient client = server.client();             // open link with client
   String tstr;                                     // temp store for building line of html
-  client.write(webheader("").c_str());             // html page header  (with extra formatting)
+  webheader(client);             // html page header  (with extra formatting)
 
   // log page request including clients IP address
     IPAddress cip = client.remoteIP();
@@ -268,22 +270,19 @@ void handleRoot() {
 
 
   // build the HTML code 
-  
-    tstr = "<FORM action='" + HomeLink + "' method='post'>\n";     // used by the buttons (action = the page send it to)
-    client.write(tstr.c_str());
-    client.write("<P>");                                           // start of section
 
-    tstr = "Welcome to the demo " + ESPType + " web page\n";
-    client.write(tstr.c_str());
+    client.printf("<FORM action='%s' method='post'>\n", HomeLink);     // used by the buttons (action = the page send it to)
+    client.write("<P>");                                               // start of section
+
+    client.printf("Welcome to the demo %s web page\n", ESPType.c_str());
 
     // insert an iframe containing the changing data (updates every few seconds using javascript)
       client.write("<br><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
-      client.write("<script>\n");
-      tstr = "setTimeout(function() {document.getElementById('dataframe').src='/data';}, " + JavaRefreshTime +");\n";
-      client.write(tstr.c_str());
-      tstr = "window.setInterval(function() {document.getElementById('dataframe').src='/data';}, " + String(datarefresh) + ");\n";
-      client.write(tstr.c_str());
-      client.write("</script>\n"); 
+      // javascript to refresh data display
+        client.write("<script>\n");
+        client.printf("setTimeout(function() {document.getElementById('dataframe').src='/data';}, %s );\n", JavaRefreshTime);
+        client.printf("window.setInterval(function() {document.getElementById('dataframe').src='/data';}, %s );\n", datarefresh);
+        client.write("</script>\n"); 
 
     // demo radio buttons - "RADIO1"
       client.write("<br>Demo radio buttons\n");
@@ -305,8 +304,8 @@ void handleRoot() {
   
     // close html page
     client.write("</form>");                                                  // end form section (buttons)
-      client.write(webfooter().c_str());                                      // html page footer
-      delay(3);
+      webfooter(client);                                                      // html page footer
+      delay(3);        
       client.stop();
 
 }
@@ -331,13 +330,8 @@ void handleData(){
   client.write(tstr.c_str());
 
   // OTA enabled status
-    if (OTAEnabled) {
-       tstr = red + "<br>OTA ENABLED!" + endcolour;
-       client.write(tstr.c_str());
-    }
-
+    if (OTAEnabled) client.printf("%s <br>OTA ENABLED! %s", colRed, colEnd);
     
-  
   // close html page
     client.write("</body></html>\n");
     delay(3);
@@ -359,7 +353,7 @@ void handleTest(){
       IPAddress cip = client.remoteIP();
       log_system_message("Test page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
   
-  client.write(webheader().c_str());                // add the standard html header
+  webheader(client);                 // add the standard html header
   client.write("<br>TEST PAGE<br><br>\n");
 
   // ---------------------------- test section here ------------------------------
@@ -371,7 +365,7 @@ void handleTest(){
   // -----------------------------------------------------------------------------
 
   // end html page
-    client.write(webfooter().c_str());            // add the standard web page footer
+    webfooter(client);            // add the standard web page footer
     delay(1);
     client.stop();
 
