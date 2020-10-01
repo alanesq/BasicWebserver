@@ -45,7 +45,9 @@
 
   const String _SenderName = stitle;
 
-  bool SendImage = 1;                                                 // set to 1 if sending an image with email
+  const String _SMTP = "smtp.gmail.com";
+
+  bool SendImage = 0;                                                 // set to 1 if sending an image with email - requires spiffs
   
 
 
@@ -110,11 +112,11 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody) {
   //Data from internal memory
   // smtpData.addAttachData("firebase_logo.png", "image/png", (uint8_t *)dummyImageData, sizeof dummyImageData);
 
-  // attach image file to email
-    if (SpiffsFileCounter > 0) {
-      String TFileName = "/" + String(SpiffsFileCounter) + ".jpg";
-      if (SendImage) smtpData.addAttachFile(TFileName);
-    }
+  //// attach image file to email
+  //  if (SpiffsFileCounter > 0) {
+  //    String TFileName = "/" + String(SpiffsFileCounter) + ".jpg";
+  //    if (SendImage) smtpData.addAttachFile(TFileName);
+  //  }
 
   smtpData.setSendCallback(sendCallback);
 
