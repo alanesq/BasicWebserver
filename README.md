@@ -9,6 +9,8 @@ It is the easiest way I have found to serve web pages with control buttons, upda
 a clock (using NTP)
 BTW - This sketch will automatically adjust to running on either a ESP8266 or a ESP32
 
+It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system and OTA updating.
+
 <table><tr>
   <td><img src="/Images/Screenshot1.png" /></td>
   <td><img src="/Images/Screenshot2.png" /></td>
