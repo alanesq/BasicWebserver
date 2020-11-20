@@ -2,7 +2,7 @@
  *
  *      Basic web server For ESP8266/ESP32 using Arduino IDE 
  *             
- *      Included files: gmail.h, standard.h, ota.h and wifi.h (gmailxxx.h is optional)
+ *      Included files: gmail.h, standard.h, ota.h, oled.h and wifi.h (gmailxxx.h is optional)
  *             
  *             
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
@@ -44,13 +44,17 @@
 // ---------------------------------------------------------------
 
 
-  const char stitle[] = "BasicWebServer";                // title of this sketch
+  const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char sversion[] = "30Sep20";                     // version of this sketch
+  const char* sversion = "19Nov20";                      // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
+
+  #define ENABLE_OLED 1                                  // Enable OLED display  
+
+  #define ENABLE_EMAIL 0                                 // Enable E-mail  
   
-  #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
+  #define ENABLE_OTA 0                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
 
   const char HomeLink[] = "/";                           // Where home button on web pages links to (usually "/")
@@ -72,6 +76,7 @@
   const boolean ledOFF = HIGH;
 
   const int serialSpeed = 115200;                        // Serial data speed to use
+  const bool serialDebug = 1;                            // provide extended debug info on serial port
   
 
 // ---------------------------------------------------------------
@@ -90,22 +95,24 @@ bool OTAEnabled = 0;                    // flag if OTA has been enabled (via sup
 
 uint32_t LEDtimer = millis();           // used for flashing the LED
   
-  
 #include "wifi.h"                       // Load the Wifi / NTP stuff
 
-#include "standard.h"                   // Standard BasicWebServer procedures
+#include "standard.h"                   // Some standard procedures
 
 #if ENABLE_OTA
   #include "ota.h"                      // Over The Air updates (OTA)
 #endif
 
+#if ENABLE_OLED
+  #include "oled.h"                     // OLED display - i2c version SSD1306
+#endif
 
-//// if email required include this section
-//#if defined(ESP8266) 
-//    #include "gmail_esp8266.h"
-//#elif defined(ESP32) 
-//    #include "gmail_esp32.h"
-//#endif
+#if defined(ESP8266) && ENABLE_EMAIL
+    #include "gmail_esp8266.h"
+#elif defined(ESP32)  && ENABLE_EMAIL
+    #include "gmail_esp32.h"
+#endif
+
 
   
 // ---------------------------------------------------------------
@@ -132,7 +139,11 @@ void setup(void) {
     Serial.printf("Flash chip frequency: %d (Hz)\n", ESP.getFlashChipSpeed());
     Serial.printf("\n");
   #endif
-  
+
+  #if ENABLE_OLED
+    oledSetup();         // initialise the oled display
+  #endif
+ 
   // Serial.setDebugOutput(true);                                // enable extra diagnostic info  
    
   // configure the onboard LED
@@ -176,8 +187,8 @@ void setup(void) {
 
   // Finished connecting to network
     digitalWrite(led, ledOFF);
-    // log_system_message(stitle + " Has Started");             
-
+    // log_system_message(stitle + " Has Started");  
+  
 }
 
 
@@ -194,6 +205,9 @@ void loop(void){
   
   server.handleClient();            // service any web page requests (may not be needed for esp32?)
 
+  #if ENABLE_OLED
+    oledLoop();                       // handle oled menu system
+  #endif
 
 
 
@@ -299,12 +313,11 @@ void handleRoot() {
       // if ( x == 1 ) client.write("background-color:red; ");      // to change button color depending on state
       client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
-
-    client.write("</P>\n");    // end of section    
   
-    // close html page
-    client.write("</form>");                                                  // end form section (buttons)
-      webfooter(client);                                                      // html page footer
+    // close page
+      client.write("</P>");    // end of section    
+      client.write("</form>\n");                                             // end form section (used by buttons etc.)
+      webfooter(client);                                                     // html page footer
       delay(3);        
       client.stop();
 
@@ -327,7 +340,7 @@ void handleData(){
 
   client.write("<br>Auto refreshing information goes here\n");
   tstr = "<br>" + currentTime() + "\n";   
-  client.write(tstr.c_str());
+  client.write(tstr.c_str());                   // convert from String to array
 
   // OTA enabled status
     if (OTAEnabled) client.printf("%s <br>OTA ENABLED! %s", colRed, colEnd);
@@ -356,13 +369,16 @@ void handleTest(){
   webheader(client);                 // add the standard html header
   client.write("<br>TEST PAGE<br><br>\n");
 
+
   // ---------------------------- test section here ------------------------------
+
 
 
 
 
        
   // -----------------------------------------------------------------------------
+
 
   // end html page
     webfooter(client);            // add the standard web page footer
