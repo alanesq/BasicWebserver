@@ -14,9 +14,10 @@
  *      Note:  To add ESP8266/32 ability to the Arduino IDE enter the below line in to FILE/PREFERENCES/BOARDS MANAGER
  *             http://arduino.esp8266.com/stable/package_esp8266com_index.json, https://dl.espressif.com/dl/package_esp32_index.json
  *             You can then add them in the Boards Manager.
+ *             ESP8266 addon package used = v2.5.2     (I find problems if using a newer version)
  *          
  *      First time the ESP starts it will create an access point "ESPConfig" which you need to connect to in order to enter your wifi details.  
- *             default password = "12345678"   (note-it may not work if anything other than 8 characters long for some reason?)
+ *             default password = "password"   (note-it may not work if anything other than 8 characters long for some reason?)
  *             see: https://randomnerdtutorials.com/wifimanager-with-esp8266-autoconnect-custom-parameter-and-manage-your-ssid-and-password
  *
  * 
@@ -46,15 +47,15 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "19Nov20";                      // version of this sketch
+  const char* sversion = "24Nov20";                      // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
 
-  #define ENABLE_OLED 1                                  // Enable OLED display  
+  #define ENABLE_OLED 0                                  // Enable OLED display  
 
   #define ENABLE_EMAIL 0                                 // Enable E-mail  
   
-  #define ENABLE_OTA 0                                   // Enable Over The Air updates (OTA)
+  #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
 
   const char HomeLink[] = "/";                           // Where home button on web pages links to (usually "/")
@@ -163,14 +164,18 @@ void setup(void) {
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
     //    Serial.println("starting access point");
-    //    WiFi.softAP("ESP-AP", "password");               // access point settings (Note: password must be 8 characters for some reason)
+    //    WiFi.softAP("ESP-AP", "password");               // access point settings (Note: password must be 8 characters for some reason - this may no longer be true?)
     //    WiFi.mode(WIFI_AP_STA);                          // enable as both Station and access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    IPAddress myIP = WiFi.softAPIP();
     //    Serial.print("Access Point Started - IP address: ");
     //    Serial.println(myIP);
   
-  // WiFi.setSleepMode(WIFI_NONE_SLEEP);     // Stops wifi turning off (if on causes wifi to drop out randomly on esp8266 boards)
-  // WiFi.setSleep(false);                   // another possibility?
+  // Stop wifi going to sleep (if enabled it causes wifi to drop out randomly especially on esp8266 boards)
+    #if defined ESP8266
+      WiFi.setSleepMode(WIFI_NONE_SLEEP);     
+    #elif defined ESP32
+      WiFi.setSleep(false);   
+    #endif
     
   // set up web page request handling
     server.on(HomeLink, handleRoot);         // root page
@@ -340,7 +345,7 @@ void handleData(){
 
   client.write("<br>Auto refreshing information goes here\n");
   tstr = "<br>" + currentTime() + "\n";   
-  client.write(tstr.c_str());                   // convert from String to array
+  client.print(tstr);         
 
   // OTA enabled status
     if (OTAEnabled) client.printf("%s <br>OTA ENABLED! %s", colRed, colEnd);

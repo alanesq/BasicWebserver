@@ -1,9 +1,12 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 30Sep20
+ *      Standard procedures - 07Oct20
+ *      
+ *      part of the BasicWebserver sketch
+ *      
  *             
- *  
  **************************************************************************************************/
+
 
 // forward declarations
   void log_system_message(String);
@@ -21,13 +24,13 @@
 //                              -Startup
 // ----------------------------------------------------------------
   
-// html text colour codes (should use sty
+// html text colour codes (obsolete html now and should use CSS instead)
   const char colRed[] = "<font color='#FF0000'>";           // red text
   const char colGreen[] = "<font color='#006F00'>";         // green text
   const char colblue[] = "<font color='#0000FF'>";          // blue text
   const char colEnd[] = "</font>";                          // end coloured text
 
-String system_message[LogNumber + 1];                       // system log messages
+String system_message[LogNumber + 1];                       // system log message store
 
 
 
@@ -43,11 +46,11 @@ void log_system_message(String smes) {
       system_message[i]=system_message[i+1];
     }
 
-  // add the message
+  // add the new message to the end
     system_message[LogNumber] = currentTime() + " - " + smes;
   
   // also send message to serial port
-    Serial.println(system_message[LogNumber]);
+    if (serialDebug) Serial.println(system_message[LogNumber]);
 }
 
 
@@ -59,35 +62,32 @@ void log_system_message(String smes) {
 //    additional style settings can be included
 
 
-void webheader(WiFiClient &client) {
+void webheader(WiFiClient &client, char style[] = " ") {
 
       client.write("<!DOCTYPE html>\n");
       client.write(  "<html lang='en'>\n");
       client.write(     "<head>\n");
       client.write(       "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
       client.write(       "<link rel=\'icon\' href=\'data:,\'>\n");
-      client.write(       "<title>");
-      client.write(stitle);                    // sketch title
-      client.write("      </title>\n");
-      client.write(       "<style>\n");                             /* Settings here for the top of screen menu appearance */
+      client.printf(      "<title> %s </title>\n", stitle);                            // insert sketch title
+      client.write(       "<style>\n");                                                // Settings here for the top of screen menu appearance 
       client.write(         "ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);}\n");
       client.write(         "li {float: left;}\n");
       client.write(         "li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n");
       client.write(         "li a:hover { background-color: rgb(100, 0, 0);}\n" );
+      client.printf(      "%s\n", style);                                              // insert aditional style if supplied 
       client.write(       "</style>\n");
       client.write(     "</head>\n");
       client.write(     "<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n");
       client.write(       "<ul>\n");
-      client.write(         "<li><a href='");
-      client.write(HomeLink);                  // home page url
-      client.write(         "'>Home</a></li>\n");        /* home menu button */
-      client.write(         "<li><a href='/log'>Log</a></li>\n");                     /* log menu button */
-      client.write(         "<h1> <font color='#FF0000'>");
-      client.write(stitle);                    // sketch title
-      client.write("</h1></font>\n");           /* display the project title in red */
+      client.printf(        "<li><a href='%s'>Home</a></li>\n", HomeLink);             // home page url
+      client.write(         "<li><a href='/log'>Log</a></li>\n");                      // log menu button 
+      client.printf(        "<h1> <font color='#FF0000'>%s</h1></font>\n", stitle);    // sketch title
       client.write(       "</ul>\n");
 
 }
+
+
 
 
 // ----------------------------------------------------------------
@@ -137,12 +137,13 @@ void handleLogpage() {
 
   // log page request including clients IP address
       IPAddress cip = client.remoteIP();
-      log_system_message("Root page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));    
-
+      log_system_message("Root page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));   
+      // To send to serial port use: Serial.println(cip.toString());
+      
 
     // build the html for /log page
 
-      webheader(client);                    // html page header  
+      webheader(client);                    // send html page header  
 
       client.write("<P>\n");                // start of section
   
@@ -160,7 +161,7 @@ void handleLogpage() {
       client.write("<br>");
     
       // close html page
-        webfooter(client);                          // html page footer
+        webfooter(client);                          // send html page footer
         delay(3);
         client.stop();
 
@@ -204,18 +205,20 @@ void handleNotFound() {
 
 String requestpage(const char* ip, String page, uint16_t port){
 
-  Serial.print("requesting web page: ");
-  Serial.println(ip + page);
+  if (serialDebug) {
+    Serial.print("requesting web page: ");
+    Serial.println(ip + page);
+  }
   //log_system_message("requesting web page");      
 
   // Connect to the site 
     WiFiClient client;
     if (!client.connect(ip, port)) {
-      Serial.println("Connection failed :-(");
+      if (serialDebug) Serial.println("Connection failed :-(");
       log_system_message("web connection failed");      
       return "connection failed";
     }  
-    Serial.println("Connected to host - sending request...");
+    if (serialDebug) Serial.println("Connected to host - sending request...");
 
 
     // request the page
@@ -223,7 +226,7 @@ String requestpage(const char* ip, String page, uint16_t port){
                  "Host: " + ip + "\r\n" + 
                  "Connection: close\r\n\r\n");
   
-    Serial.println("Request sent - waiting for reply...");
+    if (serialDebug) Serial.println("Request sent - waiting for reply...");
   
     //Wait up to 5 seconds for server to respond then read response
     uint16_t i = 0;
@@ -238,12 +241,14 @@ String requestpage(const char* ip, String page, uint16_t port){
     while( (client.available()) && (wpage.length() <= 200) ) {
       wpage += client.readStringUntil('\r');     
     }
-    Serial.println("-----received web page--------");
-    Serial.println(wpage);
-    Serial.println("------------------------------");
+    if (serialDebug) {
+      Serial.println("-----received web page--------");
+      Serial.println(wpage);
+      Serial.println("------------------------------");
+    }
 
     client.stop();    // close connection
-    Serial.println("Connection closed.");
+    if (serialDebug) Serial.println("Connection closed.");
 
   return wpage;
 

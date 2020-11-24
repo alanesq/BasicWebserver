@@ -1,6 +1,8 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections - 27Sep20
+ *      Wifi / NTP Connections - 01Oct20
+ *      
+ *      part of the BasicWebserver sketch
  *             
  *      Set up wifi for either esp8266 or esp32 plus NTP (network time)
  *                    
@@ -19,7 +21,7 @@
     
     // Configuration Portal (Wifimanager)
       const String portalName = "espcam1";
-      const String portalPassword = "12345678";
+      const String portalPassword = "password";
       // String portalName = "ESP_" + String(ESP_getChipId(), HEX);               // use chip id
       // String portalName = stitle;                                              // use sketch title
 
@@ -28,7 +30,9 @@
       // const String mDNS_name = stitle;                                         // use sketch title
       
 
+
 // *************************************************************************************************
+
     
 
 // forward declarations
@@ -66,7 +70,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
     #include <ESP8266mDNS.h>
     const String ESPType = "ESP8266";
   #else
-      #error "Only works with ESP8266 or ESP32"
+      #error "This sketch only works with the ESP8266 or ESP32"
   #endif
  
   // SSID and Password for wifi 
@@ -103,7 +107,8 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
 
 void startWifiManager() {
 
-  // ClearWifimanagerSettings();      // Erase stored wifi configuration (wifimanager)
+  // ClearWifimanagerSettings();               // Erase stored wifi configuration (wifimanager)
+  // ESP_wifiManager.resetSettings();
  
   uint32_t startedAt = millis();
 
@@ -153,10 +158,10 @@ void startWifiManager() {
   
     Serial.print("After waiting ");
     Serial.print((millis()- startedAt) / 1000);
-    Serial.print(F(" secs more in setup() connection result is: \n "));
+    Serial.print(" secs more in setup() connection result is: \n ");
   
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.print(F("connected. Local IP: "));
+      Serial.print("connected. Local IP: ");
       Serial.println(WiFi.localIP());
       wifiok = 1;     // flag wifi now ok
     } else {
@@ -180,7 +185,7 @@ void startWifiManager() {
 
 
   // Set up mDNS responder:
-    Serial.println( MDNS.begin(mDNS_name.c_str()) ? F("mDNS responder started ok") : F("Error setting up mDNS responder") );
+    Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
 
     
   // start NTP
@@ -192,7 +197,7 @@ void startWifiManager() {
 
 
 // ----------------------------------------------------------------
-//               -Return current time and date as string
+//          -Return current time and date as a string
 // ----------------------------------------------------------------
 
 String currentTime(){
@@ -201,7 +206,7 @@ String currentTime(){
 
    if (IsBST()) t+=3600;     // add one hour if it is Summer Time
 
-   String ttime = String(hour(t)) + ":" ;                                               // hours
+   String ttime = String(hour(t)) + ":" ;                                             // hours
    if (minute(t) < 10) ttime += "0";                                                  // minutes
    ttime += String(minute(t)) + " ";
    ttime += DoW[weekday(t)-1] + " ";                                                  // day of week
@@ -216,7 +221,6 @@ String currentTime(){
 //-----------------------------------------------------------------------------
 //                           -British Summer Time check
 //-----------------------------------------------------------------------------
-
 // returns true if it is British Summer time
 //         code from https://my-small-projects.blogspot.com/2015/05/arduino-checking-for-british-summer-time.html
 
@@ -315,8 +319,10 @@ void sendNTPpacket(const char* address) {
 time_t getNTPTime() {
 
   // Send a UDP packet to the NTP pool address
-  Serial.print(F("\nSending NTP packet to "));
-  Serial.println(timeServer);
+  if (serialDebug) {
+    Serial.print("\nSending NTP packet to ");
+    Serial.println(timeServer);
+  }
   sendNTPpacket(timeServer);
 
   // Wait to see if a reply is available - timeout after X seconds. At least
@@ -341,8 +347,10 @@ time_t getNTPTime() {
     // combine the four bytes (two words) into a long integer
     // this is NTP time (seconds since Jan 1 1900)
     unsigned long secsSince1900 = highWord << 16 | lowWord;     // shift highword 16 binary places to the left then combine with lowword
-    Serial.print("Seconds since Jan 1 1900 = ");
-    Serial.println(secsSince1900);
+    if (serialDebug) {
+      Serial.print("Seconds since Jan 1 1900 = ");
+      Serial.println(secsSince1900);
+    }
 
     // now convert NTP time into everyday time:
     //Serial.print("Unix time = ");
@@ -361,7 +369,7 @@ time_t getNTPTime() {
   }
 
   // Failed to get an NTP/UDP response
-    Serial.println("No NTP response");
+    if (serialDebug) Serial.println("No NTP response");
     setSyncInterval(_resyncErrorSeconds);       // try more frequently until a response is received
     NTPok = 0;                                  // flag NTP not currently connecting
 

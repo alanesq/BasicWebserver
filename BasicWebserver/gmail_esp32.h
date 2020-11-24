@@ -1,6 +1,8 @@
 /**************************************************************************************************
  * 
  *      Send emails from ESP32 via Gmail    
+ *      
+ *      part of the BasicWebserver sketch
  * 
  *      include in main sketch if sending emails is required with command     #include "gmail.h"
  *    
@@ -10,7 +12,7 @@
  *      set the following option:     Allow less secure apps: ON       
  *                                see:  https://myaccount.google.com/lesssecureapps
  *
- *                                           Gmail - v2.0  - 27Sep20         
+ *                                           Gmail - v2.0  - 01Oct20         
  *  
  **************************************************************************************************
 
@@ -37,17 +39,17 @@
 
 //               s e t t i n g s 
 
-  const String emailReceiver = "<email address to send to>";         // address to send emails
+  const String emailReceiver = "<email to send to>";         // address to send emails
   
-  const String _mailUser = "<email address to send from>";
+  const String _mailUser = "<email to send from>";
   
   const String _mailPassword = "<email password>";
 
+  const String _SMTP = "smtp.gmail.com";                           // smtp server address
+
   const String _SenderName = stitle;
 
-  const String _SMTP = "smtp.gmail.com";
-
-  bool SendImage = 0;                                                 // set to 1 if sending an image with email - requires spiffs
+  bool SendImage = 0;                                              // set to 1 if sending an image with email  (requires Spiffs)
   
 
 
@@ -69,8 +71,10 @@
 
 byte sendEmail(String emailTo, String emailSubject, String emailBody) {
 
-  Serial.print(F("\nSending email: "));
-  Serial.println(emailTo + "," + emailSubject + "," + emailBody);
+  if (serialDebug) {
+    Serial.print("\nSending email: ");
+    Serial.println(emailTo + "," + emailSubject + "," + emailBody);
+  }
 
   //Set the Email host, port, account and password
   smtpData.setLogin(_SMTP, 587, _mailUser, _mailPassword);
@@ -112,11 +116,11 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody) {
   //Data from internal memory
   // smtpData.addAttachData("firebase_logo.png", "image/png", (uint8_t *)dummyImageData, sizeof dummyImageData);
 
-  //// attach image file to email
-  //  if (SpiffsFileCounter > 0) {
-  //    String TFileName = "/" + String(SpiffsFileCounter) + ".jpg";
-  //    if (SendImage) smtpData.addAttachFile(TFileName);
-  //  }
+//  // attach image file to email
+//    if (SpiffsFileCounter > 0) {
+//      String TFileName = "/" + String(SpiffsFileCounter) + ".jpg";
+//      if (SendImage) smtpData.addAttachFile(TFileName);
+//    }
 
   smtpData.setSendCallback(sendCallback);
 
@@ -137,7 +141,8 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody) {
   smtpData.empty();
 
   
-  Serial.println("------ end of email send -----");
+  if (serialDebug) Serial.println("------ end of email send -----");
+  
   return !tresult;    // 0 = ok
 
 }
@@ -145,7 +150,7 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody) {
 
 
 
-//Callback function to get the Email sending status
+// Callback function to get the Email sending status
 void sendCallback(SendStatus msg)
 {
   //Print the current status

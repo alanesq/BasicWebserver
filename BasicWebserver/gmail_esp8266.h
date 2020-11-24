@@ -1,6 +1,8 @@
 /**************************************************************************************************
  * 
  *      Send emails from ESP8266 via Gmail    
+ *      
+ *      part of the BasicWebserver sketch
  * 
  *      include in main sketch if sending emails is required with command     #include "gmail.h"
  *    
@@ -11,7 +13,7 @@
  *      set the following option:     Allow less secure apps: ON       
  *                                see:  https://myaccount.google.com/lesssecureapps
  *
- *                                            Gmail - v2.0  - 27Sep20          
+ *                                            Gmail - v2.0  - 01Oct20          
  *  
  **************************************************************************************************
 
@@ -44,8 +46,8 @@
   char* _mailUser = "<email to send from>";
   
   char* _mailPassword = "<email password>";
-  
-  
+
+   
 
 #include <EMailSender.h>        
 
@@ -59,7 +61,7 @@ EMailSender emailSend(_mailUser, _mailPassword);
 
 byte sendEmail(String emailTo, String emailSubject, String emailBody)
 {
-  Serial.println("\n----- sending an email -------");
+  if (serialDebug) Serial.println("\n----- sending an email -------");
 
     EMailSender::EMailMessage message;
 
@@ -82,11 +84,12 @@ byte sendEmail(String emailTo, String emailSubject, String emailBody)
     
     EMailSender::Response resp = emailSend.send(_emailTo, message);
     
-
-    Serial.println("Sending status: ");
-    Serial.println(resp.status);
-    Serial.println(resp.code);       // responses:    0=message sent, 1=SMTP Response TIMEOUT, 2=Could not connect to mail server.
-    Serial.println(resp.desc);
+    if (serialDebug) {
+      Serial.println("Sending status: ");
+      Serial.println(resp.status);
+      Serial.println(resp.code);       // responses:    0=message sent, 1=SMTP Response TIMEOUT, 2=Could not connect to mail server.
+      Serial.println(resp.desc);
+    }
 
     // convert result code from string to byte
       byte tresult = 100;

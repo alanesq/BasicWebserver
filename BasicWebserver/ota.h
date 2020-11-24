@@ -1,8 +1,8 @@
 /**************************************************************************************************
  *  
- *      Over The Air updates (OTA) - 05Sep20
+ *      Over The Air updates (OTA) - 01Oct20
  * 
- *      part of the Webserver library
+ *      part of the BasicWebserver sketch
  *                                   
  *      In Arduino IDE Select "ESP32 dev module" not ESP32-cam, PSRAM enabled
  *                     
@@ -107,27 +107,30 @@ void otaSetup() {
 void handleOTA(){
 
   WiFiClient client = server.client();          // open link with client
-  String tstr;                                  // temp store for building lines of html;
-
-  webheader(client);            // add the standard html header
 
   // log page request including clients IP address
       IPAddress cip = client.remoteIP();
-      log_system_message("OTA web page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
+      log_system_message("OTA web page requested from: " + String(cip[0]) + "." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
 
-  client.write("<br><H1>Update firmware</H1><br>\n");
-  tstr = "Current version =  " + String(stitle) + ", " + String(sversion) + "<br><br>";
-  client.write(tstr.c_str());
+
+  // Send page html
+
+    webheader(client);                            // add the standard html header
   
-  client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
-  client.write("<input type='file' style='width: 300px' name='update'>\n");
-  client.write("<br><br><input type='submit' value='Update'></form><br>\n");
+    client.write("<br><H1>Update firmware</H1><br>\n");
+    client.printf("Current version =  %s, %s \n\n", stitle, sversion);
+    
+    client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
+    client.write("<input type='file' style='width: 300px' name='update'>\n");
+    client.write("<br><br><input type='submit' value='Update'></form><br>\n");
+  
+    client.write("<br><br>Device will reboot when upload complete");
+    client.printf("%s <br>To disable OTA restart device<br> %s \n", colRed, colEnd);
 
-  client.write("<br><br>Device will reboot when upload complete");
-  client.printf("%s <br>To disable OTA restart device<br> %s \n", colRed, colEnd);
+    webfooter(client);                          // add the standard web page footer
+    
                           
   // close html page
-    webfooter(client);                      // add the standard web page footer
     delay(3);
     client.stop();
     
