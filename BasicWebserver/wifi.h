@@ -41,8 +41,7 @@
   void sendNTPpacket();
   time_t getNTPTime();
   void ClearWifimanagerSettings();
-  String requestpage(String);  
-
+  String requestWebPage(String);
 
 
 // ----------------------------------------------------------------
@@ -55,7 +54,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
-    #include "HTTPClient.h"             // used by requestpage()
+    #include "HTTPClient.h"             // used by requestwebpage()
     #include <WiFiClient.h>
     #include <WebServer.h>
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
@@ -64,7 +63,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
     const String ESPType = "ESP32";
   #elif defined ESP8266
     #include <ESP8266WiFi.h>            // https://github.com/esp8266/Arduino
-    #include "ESP8266HTTPClient.h"      // used by requestpage()
+    #include "ESP8266HTTPClient.h"      // used by requestwebpage()
     #include <DNSServer.h>
     #include <ESP8266WebServer.h>  
     #define ESP_getChipId()   (ESP.getChipId())
@@ -199,14 +198,13 @@ void startWifiManager() {
 
 
 // ----------------------------------------------------------------
-//          -Request a web page, read it in to a string
+//       -Request a web page, read reply it in to a string
 // ----------------------------------------------------------------
-// usage example:     String q = requestWebPage("http://192.168.1.176:80/index.htm");
-// original code from: https://techtutorialsx.com/2017/05/19/esp32-http-get-requests/
+// usage example:     String q = requestWebPage("http://192.168.1.17:80/index.htm");
 
-String requestpage(String urlRequested) {
+String requestWebPage(String urlRequested) {
   
-  if ((WiFi.status() != WL_CONNECTED)) return "ERROR: Network not connected";
+    if ((WiFi.status() != WL_CONNECTED)) return "Error: Network not connected";
   
     HTTPClient http;
     String payload;
@@ -221,6 +219,7 @@ String requestpage(String urlRequested) {
       }
     else {
       Serial.println("Error on HTTP request");
+      payload = "Error on HTTP request"
     }
  
     http.end(); //Free the resources
