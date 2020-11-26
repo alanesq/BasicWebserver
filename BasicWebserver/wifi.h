@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections - 01Oct20
+ *      Wifi / NTP Connections - 26Oct20
  *      
  *      part of the BasicWebserver sketch
  *             
@@ -26,14 +26,13 @@
       // String portalName = stitle;                                              // use sketch title
 
     // mDNS name
-      const String mDNS_name = "espcam1";
+      const String mDNS_name = "esp32";
       // const String mDNS_name = stitle;                                         // use sketch title
       
 
 
 // *************************************************************************************************
 
-    
 
 // forward declarations
   void startWifiManager();
@@ -42,6 +41,7 @@
   void sendNTPpacket();
   time_t getNTPTime();
   void ClearWifimanagerSettings();
+  String requestpage(String);  
 
 
 
@@ -55,6 +55,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
+    #include "HTTPClient.h"             // used by requestpage()
     #include <WiFiClient.h>
     #include <WebServer.h>
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
@@ -63,6 +64,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
     const String ESPType = "ESP32";
   #elif defined ESP8266
     #include <ESP8266WiFi.h>            // https://github.com/esp8266/Arduino
+    #include "ESP8266HTTPClient.h"      // used by requestpage()
     #include <DNSServer.h>
     #include <ESP8266WebServer.h>  
     #define ESP_getChipId()   (ESP.getChipId())
@@ -193,6 +195,37 @@ void startWifiManager() {
     setSyncProvider(getNTPTime);              // What is the function that gets the time (in ms since 01/01/1900)?
     setSyncInterval(_resyncErrorSeconds);     // How often should we synchronise the time on this machine (in seconds) 
            
+}
+
+
+// ----------------------------------------------------------------
+//          -Request a web page, read it in to a string
+// ----------------------------------------------------------------
+// usage example:     String q = requestWebPage("http://192.168.1.176:80/index.htm");
+// original code from: https://techtutorialsx.com/2017/05/19/esp32-http-get-requests/
+
+String requestpage(String urlRequested) {
+  
+  if ((WiFi.status() != WL_CONNECTED)) return "ERROR: Network not connected";
+  
+    HTTPClient http;
+    String payload;
+ 
+    http.begin(urlRequested);                                 //Specify the URL
+    int httpCode = http.GET();                                //Make the request
+ 
+    if (httpCode > 0) {                                       //Check for the returning code
+        payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
+      }
+    else {
+      Serial.println("Error on HTTP request");
+    }
+ 
+    http.end(); //Free the resources
+
+    return payload;
 }
 
 
