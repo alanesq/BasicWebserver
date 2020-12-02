@@ -77,9 +77,7 @@ choose from a list or display a message.
     void menuItemSelection();
     bool menuCheck();
     void staticMenu();
-    void oledLineText(byte, bool, String);
     int chooseFromList(byte, String, String[]);
-    int chooseFromListDisplayList (byte, int, String[]);
     void reWaitKeypress(int);
     
   

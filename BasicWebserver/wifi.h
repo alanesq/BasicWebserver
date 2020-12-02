@@ -20,8 +20,8 @@
 
     
     // Configuration Portal (Wifimanager)
-      const String portalName = "espcam1";
-      const String portalPassword = "password";
+      const String portalName = "ESPConfig";
+      const String portalPassword = "12345678";
       // String portalName = "ESP_" + String(ESP_getChipId(), HEX);               // use chip id
       // String portalName = stitle;                                              // use sketch title
 
@@ -41,8 +41,8 @@
   void sendNTPpacket();
   time_t getNTPTime();
   void ClearWifimanagerSettings();
-  String requestWebPage(String);
-
+  String requestWebPage(String, String, int, int);
+  
 
 // ----------------------------------------------------------------
 //                              -Startup
@@ -54,7 +54,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
-    #include "HTTPClient.h"             // used by requestwebpage()
+    //#include "HTTPClient.h"             // used by requestwebpage()
     #include <WiFiClient.h>
     #include <WebServer.h>
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
@@ -63,7 +63,7 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
     const String ESPType = "ESP32";
   #elif defined ESP8266
     #include <ESP8266WiFi.h>            // https://github.com/esp8266/Arduino
-    #include "ESP8266HTTPClient.h"      // used by requestwebpage()
+    //#include "ESP8266HTTPClient.h"      // used by requestwebpage()
     #include <DNSServer.h>
     #include <ESP8266WebServer.h>  
     #define ESP_getChipId()   (ESP.getChipId())
@@ -137,6 +137,9 @@ void startWifiManager() {
     ESP_wifiManager.setConfigPortalTimeout(600);       // Config portal timeout  
     if (ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str())) Serial.println("Portal config sucessful");
     else Serial.println("Portal config failed");    
+    delay(1000);
+    ESP.restart();                                           // reboot and try again
+    delay(5000);                                             // restart will fail without this delay
   }
 
   // connect to wifi
@@ -194,37 +197,6 @@ void startWifiManager() {
     setSyncProvider(getNTPTime);              // What is the function that gets the time (in ms since 01/01/1900)?
     setSyncInterval(_resyncErrorSeconds);     // How often should we synchronise the time on this machine (in seconds) 
            
-}
-
-
-// ----------------------------------------------------------------
-//       -Request a web page, read reply it in to a string
-// ----------------------------------------------------------------
-// usage example:     String q = requestWebPage("http://192.168.1.17:80/index.htm");
-
-String requestWebPage(String urlRequested) {
-  
-    if ((WiFi.status() != WL_CONNECTED)) return "Error: Network not connected";
-  
-    HTTPClient http;
-    String payload;
- 
-    http.begin(urlRequested);                                 //Specify the URL
-    int httpCode = http.GET();                                //Make the request
- 
-    if (httpCode > 0) {                                       //Check for the returning code
-        payload = http.getString();
-        Serial.println(httpCode);
-        Serial.println(payload);
-      }
-    else {
-      Serial.println("Error on HTTP request");
-      payload = "Error on HTTP request"
-    }
- 
-    http.end(); //Free the resources
-
-    return payload;
 }
 
 
@@ -409,6 +381,84 @@ time_t getNTPTime() {
   
 }
 
+
+// ----------------------------------------------------------------
+//                        request a web page
+// ----------------------------------------------------------------
+
+//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive     e.g. requestWebPage("192.168.1.166","/log",80,600);
+
+String requestWebPage(String ip, String page, int port, int maxChars){
+
+  if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/" 
+
+  if (serialDebug) {
+    Serial.print("requesting web page: ");
+    Serial.print(ip);
+    Serial.println(page);
+  }
+     
+    WiFiClient client;
+
+    // Connect to the site 
+      if (!client.connect(ip.c_str() , port)) {                                      
+        if (serialDebug) Serial.println("Web client connection failed");   
+        return "web client connection failed";
+      } 
+      if (serialDebug) Serial.println("Connected to host - sending request...");
+    
+    // send request - A basic request looks something like: "GET /index.html HTTP/1.1\r\nHost: 192.168.0.4:8085\r\n\r\n"
+      client.print("GET " + page + " HTTP/1.1\r\n" +
+                   "Host: " + ip + "\r\n" + 
+                   "Connection: close\r\n\r\n");
+  
+      if (serialDebug) Serial.println("Request sent - waiting for reply...");
+  
+    // Wait for server to respond then read response
+      int maxWaitTime = 3000;                                                // max time to wait for reply (ms)
+      int i = 0;
+      while ((!client.available()) && (i < (maxWaitTime / 10) )) {
+        delay(10);
+        i++;
+      }
+
+    // if reply received read data
+      String wpage = "";
+      // read response in to wpage
+        while (client.available() > 0 && maxChars > 0) {
+          #if defined ESP8266
+            delay(2);                            // just reads 255s on esp8266 if this delay is not included
+          #endif
+          wpage += char(client.read());          // read one character
+          maxChars--;
+        }
+        
+////    alternative way to read the data
+//      int rTimeout = 1500;                       // timeout waiting for reply data (ms)
+//      client.setTimeout(rTimeout);               // timeout for readString() command
+//      String wpage = client.readString();        // just read all incoming data until timeout is reached
+
+      
+    if (serialDebug) {
+      Serial.println("--------received web page-----------");
+      Serial.println(wpage);
+      Serial.println("------------------------------------");
+      Serial.flush();     // wait for data to finish sending
+    }
+    
+    client.stop();    // close connection
+    if (serialDebug) Serial.println("Connection closed");
+
+//    // extract just the content between the <body> html tags
+//      int bodyStart = wpage.indexOf("<body>");
+//      int bodyFinish = wpage.indexOf("</body>");
+//      if ( bodyStart > 0 && bodyFinish > bodyStart) {
+//        // body section found in reply
+//        wpage = wpage.substring(bodyStart + 6, bodyFinish);
+//      }
+    
+  return wpage;
+}
 
 
 //-----------------------------------------------------------------------------

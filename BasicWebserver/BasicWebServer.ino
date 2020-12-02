@@ -17,7 +17,7 @@
  *             ESP8266 addon package used = v2.5.2     (I find problems if using a newer version)
  *          
  *      First time the ESP starts it will create an access point "ESPConfig" which you need to connect to in order to enter your wifi details.  
- *             default password = "password"   (note-it may not work if anything other than 8 characters long for some reason?)
+ *             default password = "12345678"   (note-it may not work if anything other than 8 characters long for some reason?)
  *             see: https://randomnerdtutorials.com/wifimanager-with-esp8266-autoconnect-custom-parameter-and-manage-your-ssid-and-password
  *
  * 
@@ -38,8 +38,6 @@
  *      
  ********************************************************************************************************************/
 
-
-
 // ---------------------------------------------------------------
 //                          -SETTINGS
 // ---------------------------------------------------------------
@@ -47,7 +45,7 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "24Nov20";                      // version of this sketch
+  const char* sversion = "29Nov20";                      // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
 
@@ -125,6 +123,7 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 void setup(void) {
     
   Serial.begin(serialSpeed);                                   // serial port
+  delay(200);
 
   Serial.println("\n\n\n");                                    // line feeds
   Serial.println("-----------------------------------");
@@ -193,10 +192,8 @@ void setup(void) {
   // Finished connecting to network
     digitalWrite(led, ledOFF);
     // log_system_message(stitle + " Has Started");  
-  
+
 }
-
-
 
 // ----------------------------------------------------------------
 //   -LOOP     LOOP     LOOP     LOOP     LOOP     LOOP     LOOP
@@ -211,7 +208,7 @@ void loop(void){
   server.handleClient();            // service any web page requests (may not be needed for esp32?)
 
   #if ENABLE_OLED
-    oledLoop();                       // handle oled menu system
+    oledLoop();                     // handle oled menu system
   #endif
 
 
@@ -354,9 +351,22 @@ void handleData(){
     client.write("</body></html>\n");
     delay(3);
     client.stop();
-  
 }
 
+
+// ----------------------------------------------------------------
+//      -ping web page requested     i.e. http://x.x.x.x/ping
+// ----------------------------------------------------------------
+
+void handlePing(){
+
+  log_system_message("ping web page requested");      
+  String message = "ok";
+
+  server.send(404, "text/plain", message);   // send reply as plain text
+  message = "";      // clear variable
+  
+}
 
 
 // ----------------------------------------------------------------
@@ -380,6 +390,7 @@ void handleTest(){
 
 
 
+  
 
        
   // -----------------------------------------------------------------------------
@@ -392,23 +403,6 @@ void handleTest(){
 
   
 }
-
-
-
-// ----------------------------------------------------------------
-//      -ping web page requested     i.e. http://x.x.x.x/ping
-// ----------------------------------------------------------------
-
-void handlePing(){
-
-  log_system_message("ping web page requested");      
-  String message = "ok";
-
-  server.send(404, "text/plain", message);   // send reply as plain text
-  message = "";      // clear variable
-  
-}
-
 
 
 // --------------------------- E N D -----------------------------

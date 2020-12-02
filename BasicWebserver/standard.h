@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 07Oct20
+ *      Standard procedures - 29Nov20
  *      
  *      part of the BasicWebserver sketch
  *      
@@ -14,7 +14,6 @@
   void webfooter();
   void handleLogpage();
   void handleNotFound();
-  String requestpage(const char*, String, uint16_t);
   void handleReboot();
   void WIFIcheck();
 
@@ -192,66 +191,6 @@ void handleNotFound() {
   server.send ( 404, "text/plain", message );
   message = "";      // clear variable
   
-}
-
-
-
-// ----------------------------------------------------------------
-//        -request a web page and return reply as a string
-// ----------------------------------------------------------------
-//
-//     parameters = ip address, page to request, port to use (usually 80)     e.g.   "alanesq.com","/index.htm",80
-
-
-String requestpage(const char* ip, String page, uint16_t port){
-
-  if (serialDebug) {
-    Serial.print("requesting web page: ");
-    Serial.println(ip + page);
-  }
-  //log_system_message("requesting web page");      
-
-  // Connect to the site 
-    WiFiClient client;
-    if (!client.connect(ip, port)) {
-      if (serialDebug) Serial.println("Connection failed :-(");
-      log_system_message("web connection failed");      
-      return "connection failed";
-    }  
-    if (serialDebug) Serial.println("Connected to host - sending request...");
-
-
-    // request the page
-    client.print(String("GET " + page + " HTTP/1.1\r\n") +
-                 "Host: " + ip + "\r\n" + 
-                 "Connection: close\r\n\r\n");
-  
-    if (serialDebug) Serial.println("Request sent - waiting for reply...");
-  
-    //Wait up to 5 seconds for server to respond then read response
-    uint16_t i = 0;
-    while ((!client.available()) && (i < 500)) {
-      delay(10);
-      i++;
-    }
-    
-    String wpage="";    // reply stored here
-    
-    // Read the entire response up to 200 characters
-    while( (client.available()) && (wpage.length() <= 200) ) {
-      wpage += client.readStringUntil('\r');     
-    }
-    if (serialDebug) {
-      Serial.println("-----received web page--------");
-      Serial.println(wpage);
-      Serial.println("------------------------------");
-    }
-
-    client.stop();    // close connection
-    if (serialDebug) Serial.println("Connection closed.");
-
-  return wpage;
-
 }
 
 
