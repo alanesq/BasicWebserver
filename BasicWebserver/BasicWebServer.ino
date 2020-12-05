@@ -45,7 +45,7 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "29Nov20";                      // version of this sketch
+  const char* sversion = "05Dec20";                      // version of this sketch
 
   const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
 
@@ -389,7 +389,8 @@ void handleTest(){
 
 
 
-
+      // request a web page
+      requestWebPage("192.168.1.166","/log",80,600);
   
 
        

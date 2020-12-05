@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections - 26Oct20
+ *      Wifi / NTP Connections - 05Dec20
  *      
  *      part of the BasicWebserver sketch
  *             
@@ -20,13 +20,13 @@
 
     
     // Configuration Portal (Wifimanager)
-      const String portalName = "ESPConfig";
+      const String portalName = "espserver";
       const String portalPassword = "12345678";
       // String portalName = "ESP_" + String(ESP_getChipId(), HEX);               // use chip id
       // String portalName = stitle;                                              // use sketch title
 
     // mDNS name
-      const String mDNS_name = "esp32";
+      const String mDNS_name = "esp1";
       // const String mDNS_name = stitle;                                         // use sketch title
       
 
@@ -390,6 +390,11 @@ time_t getNTPTime() {
 
 String requestWebPage(String ip, String page, int port, int maxChars){
 
+  int maxWaitTime = 3000;                 // max time to wait for reply (ms)
+
+  char received[maxChars + 1];            // temp store for incoming character data
+  int received_counter = 0;               // number of characters which have been received
+
   if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/" 
 
   if (serialDebug) {
@@ -414,24 +419,32 @@ String requestWebPage(String ip, String page, int port, int maxChars){
   
       if (serialDebug) Serial.println("Request sent - waiting for reply...");
   
-    // Wait for server to respond then read response
-      int maxWaitTime = 3000;                                                // max time to wait for reply (ms)
-      int i = 0;
-      while ((!client.available()) && (i < (maxWaitTime / 10) )) {
+    // Wait for a response
+      uint32_t ttimer = millis();
+      while ( !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
         delay(10);
-        i++;
       }
 
-    // if reply received read data
-      String wpage = "";
-      // read response in to wpage
-        while (client.available() > 0 && maxChars > 0) {
-          #if defined ESP8266
-            delay(2);                            // just reads 255s on esp8266 if this delay is not included
-          #endif
-          wpage += char(client.read());          // read one character
-          maxChars--;
-        }
+    // read the response
+      while ( client.available() && received_counter < maxChars ) {
+        #if defined ESP8266
+          delay(2);                            // it just reads 255s on esp8266 if this delay is not included
+        #endif        
+        received[received_counter] = char(client.read());     // read one character
+        received_counter+=1;
+      }
+      received[received_counter] = '\0';     // end of string marker
+      
+//      // read the response in to a string
+//      String wpage = "";
+//      // read response in to wpage
+//        while (client.available() && maxChars > 0) {
+//          #if defined ESP8266
+//            delay(2);                            // just reads 255s on esp8266 if this delay is not included
+//          #endif
+//          wpage += char(client.read());          // read one character
+//          maxChars--;
+//        }
         
 ////    alternative way to read the data
 //      int rTimeout = 1500;                       // timeout waiting for reply data (ms)
@@ -441,7 +454,7 @@ String requestWebPage(String ip, String page, int port, int maxChars){
       
     if (serialDebug) {
       Serial.println("--------received web page-----------");
-      Serial.println(wpage);
+      Serial.println(received);
       Serial.println("------------------------------------");
       Serial.flush();     // wait for data to finish sending
     }
@@ -457,7 +470,7 @@ String requestWebPage(String ip, String page, int port, int maxChars){
 //        wpage = wpage.substring(bodyStart + 6, bodyFinish);
 //      }
     
-  return wpage;
+  return received;        // return the response as a String
 }
 
 
