@@ -389,8 +389,9 @@ void handleTest(){
 
 
 
-      // request a web page
-      requestWebPage("192.168.1.166","/log",80,600);
+      // demo of how to request a web page
+        String webpage = requestWebPage("192.168.1.166","/log",80,800);
+        Serial.println(webpage);
   
 
        
