@@ -5,8 +5,7 @@ so I have published it here in case it is of any use/interest to anyone else (I 
 improvements/suggestions as I am not a professional programmer by any stretch of the imagination).  
 It is not all my own work, just something I have put together for my own use from many sources.
 
-It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity and 
-a clock (using NTP)
+It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity
 BTW - This sketch will automatically adjust to running on either a ESP8266 or a ESP32
 
 It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system and OTA updating.
@@ -16,7 +15,7 @@ It has built in support for sending emails, getting the real time from NTP, a si
   <td><img src="/Images/Screenshot2.png" /></td>
 </tr></table>   
 
-The sketch as it is will first create a wifi access point named "ESPconfig", you need to connect to this with the 
+The sketch as it is will first create a wifi access point named "espserver", you need to connect to this with the 
 password "12345678" and you will then be able to enter your wifi network details so it is then able to connect to it 
 (it uses the WifiManager library to do this which is included in the above file).  Once connected to your network you 
 should be able to view a similar web page to the image above (you will need to find out what ip address it is using from 
