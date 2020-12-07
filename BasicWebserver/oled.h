@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      OLED display Menu System - 05Dec20
+ *      OLED display Menu System - 07Dec20
  * 
  *      using a i2c version SSD1306 display and rotary encoder
  * 
@@ -50,7 +50,29 @@ choose from a list or display a message.
     String menuTitle = "";                    // current menu ID number (blank = none)
     byte menuItemClicked = 100;               // menu item has been clicked flag (100=none)
     uint32_t lastREActivity = 0;              // time last activity was seen on rotary encoder
+
+  #if defined(ESP8266)
+    // esp8266
+    const String boardType="ESP8266";
+    #define I2C_SDA D2                      // i2c pins
+    #define I2C_SCL D1
+    #define encoder0PinA  D5
+    #define encoder0PinB  D6
+    #define encoder0Press D7                // button 
     
+  #elif defined(ESP32)
+    // esp32
+    const String boardType="ESP32";
+    #define I2C_SDA 21                      // i2c pins
+    #define I2C_SCL 22
+    #define encoder0PinA  13
+    #define encoder0PinB  14
+    #define encoder0Press 15                // button 
+    
+  #else
+    #error Unsupported board - must be esp32 or esp8266
+  #endif
+  
 
 // *************************************************************************************************
   
@@ -66,21 +88,6 @@ choose from a list or display a message.
     bool reButtonState = 0;                   // current debounced state of the button
     uint32_t reButtonTimer = millis();        // time button state last changed
     int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes
-    #if defined(ESP8266)
-      // esp8266
-      const String boardType="ESP8266";
-      #define encoder0PinA  D5
-      #define encoder0PinB  D6
-      #define encoder0Press D7                // button 
-    #elif defined(ESP32)
-      // esp32
-      const String boardType="ESP32";
-      #define encoder0PinA  13
-      #define encoder0PinB  14
-      #define encoder0Press 15                // button 
-    #else
-      #error Unsupported board - must be esp32, esp8266 or Arduino Uno
-    #endif
    
   // forward declarations
     void doEncoder();
@@ -91,6 +98,7 @@ choose from a list or display a message.
     void staticMenu();
     int chooseFromList(byte, String, String[]);
     void reWaitKeypress(int);
+    void displayTimeOLED();
     bool confirmActionRequired();
     
   
@@ -103,7 +111,7 @@ choose from a list or display a message.
 
 
 
-// -------------------------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
 //                                        customise the menus below
 // -------------------------------------------------------------------------------------------------
 // Useful commands:
@@ -111,12 +119,45 @@ choose from a list or display a message.
 //      chooseFromList(8, "TestList", q);   = choose from the list of 8 items in a string array 'q'
 //      enterValue("Testval", 15, 0, 30);   = enter a value between 0 and 30 (with a starting value of 15)
 
+
+/*      Usage Examples
+
+display.drawPixel(10, 10, WHITE);
+
+display.drawLine(0, 22, display.width(), 32, WHITE);
+
+display.drawRect(10, 34, 108, 28, WHITE);    
+
+// displaying a bitmap image
+//    display with: display.drawBitmap((display.width() - LOGO_WIDTH ) / 2, (display.height() - LOGO_HEIGHT) / 2, logo_bmp, LOGO_WIDTH, LOGO_HEIGHT, 1);
+//    utility for creating the data: http://javl.github.io/image2cpp/ or http://en.radzio.dxp.pl/bitmap_converter/
+  #define LOGO_HEIGHT   16
+  #define LOGO_WIDTH    16
+  static const unsigned char PROGMEM logo_bmp[] =
+  { B00000000, B11000000,
+    B00000001, B11000000,
+    B00000001, B11000000,
+    B00000011, B11100000,
+    B11110011, B11100000,
+    B11111110, B11111000,
+    B01111110, B11111111,
+    B00110011, B10011111,
+    B00011111, B11111100,
+    B00001101, B01110000,
+    B00011011, B10100000,
+    B00111111, B11100000,
+    B00111111, B11110000,
+    B01111100, B11110000,
+    B01110000, B01110000,
+    B00000000, B00110000 };
+*/
+
   
 // Available Menus
 
   // main menu
   void Main_Menu() {
-      menuTitle = "Main Menu";                                        // set the menu title
+      menuTitle = "Main Menu";                                     // set the menu title
       setMenu(0,"");                                               // clear all menu items
       setMenu(0,"list");                                           // choose from a list
       setMenu(1,"enter a value");                                  // enter a value
@@ -129,8 +170,9 @@ choose from a list or display a message.
   void menu2() {
       menuTitle = "Menu 2";  
       setMenu(0,""); 
-      setMenu(0,"menu off");
-      setMenu(1,"RETURN");
+      setMenu(0,"Time");
+      setMenu(1,"menu off");
+      setMenu(2,"RETURN");
   }
 
    
@@ -194,8 +236,16 @@ void menuItemActions() {
     
   //  --------------------- Menu 2 Actions ---------------------
 
-    // turn menus off
+    // show time/date
     if (menuTitle == "Menu 2" && menuItemClicked==0) {
+      menuItemClicked=100;                                            
+      log_system_message("Menu: Time display selected");
+      displayTimeOLED();
+      reWaitKeypress(8000);                                           // wait for key press
+    }
+    
+    // turn menus off
+    if (menuTitle == "Menu 2" && menuItemClicked==1) {
       menuItemClicked=100;                                            
       log_system_message("Menu: menu off");
       menuTitle = "";                                                 // turn menu off
@@ -204,7 +254,7 @@ void menuItemActions() {
     }
 
     // switch to main menu
-    if (menuTitle == "Menu 2" && menuItemClicked==1) {
+    if (menuTitle == "Menu 2" && menuItemClicked==2) {
       menuItemClicked=100;                                            
       log_system_message("Menu: Main Menu selected");
       Main_Menu();                                                    // show main menu
@@ -212,75 +262,11 @@ void menuItemActions() {
 
 }
 
-
-// -------------- procedures used by menus ---------------
-
-// confirm that a requested action is not a mistake
-//   returns 1 if confirmed
-
-bool confirmActionRequired() {
-  display.clearDisplay();  
-  display.setTextSize(2);
-  display.setTextColor(WHITE,BLACK);
-  display.setCursor(0, lineSpace2 * 0);
-  display.print("HOLD");
-  display.setCursor(0, lineSpace2 * 1);
-  display.print("BUTTON TO");  
-  display.setCursor(0, lineSpace2 * 2);
-  display.print("CONFIRM!");
-  display.display();
-  
-  delay(2000);
-  display.clearDisplay();  
-  display.display();
-
-  if (digitalRead(encoder0Press) == LOW) return 1;        // if button still pressed
-  return 0;
-}
-
-
 // -------------------------------------------------------------------------------------------------
 //                                        customise the menus above
 // -------------------------------------------------------------------------------------------------
 
     
-    
-/*      Usage Examples
-
-display.drawPixel(10, 10, WHITE);
-
-display.drawLine(0, 22, display.width(), 32, WHITE);
-
-display.drawRect(10, 34, 108, 28, WHITE);    
-
-// displaying a bitmap image
-//    display with: display.drawBitmap((display.width() - LOGO_WIDTH ) / 2, (display.height() - LOGO_HEIGHT) / 2, logo_bmp, LOGO_WIDTH, LOGO_HEIGHT, 1);
-//    utility for creating the data: http://javl.github.io/image2cpp/ or http://en.radzio.dxp.pl/bitmap_converter/
-  #define LOGO_HEIGHT   16
-  #define LOGO_WIDTH    16
-  static const unsigned char PROGMEM logo_bmp[] =
-  { B00000000, B11000000,
-    B00000001, B11000000,
-    B00000001, B11000000,
-    B00000011, B11100000,
-    B11110011, B11100000,
-    B11111110, B11111000,
-    B01111110, B11111111,
-    B00110011, B10011111,
-    B00011111, B11111100,
-    B00001101, B01110000,
-    B00011011, B10100000,
-    B00111111, B11100000,
-    B00111111, B11110000,
-    B01111100, B11110000,
-    B01110000, B01110000,
-    B00000000, B00110000 };
-
-*/
-
-
-// -------------------------------------------------------------------------------------------------
-
 // called from setup 
 
 void oledSetup() {
@@ -291,6 +277,7 @@ void oledSetup() {
     pinMode(encoder0PinB, INPUT);
 
   // initialise the oled display
+    Wire.begin(I2C_SDA,I2C_SCL);
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
       if (oledDebug) Serial.println(("\nError initialising the oled display"));
     }
@@ -339,6 +326,34 @@ void oledLoop() {
 //  ------------------------------------- menu procedures -------------------------------------
 //  -------------------------------------------------------------------------------------------
 
+
+// confirm that a requested action is not a mistake with a long press of the button
+//   returns 1 if confirmed
+
+bool confirmActionRequired() {
+  display.clearDisplay();  
+  display.setTextSize(2);
+  display.setTextColor(WHITE,BLACK);
+  display.setCursor(0, lineSpace2 * 0);
+  display.print("HOLD");
+  display.setCursor(0, lineSpace2 * 1);
+  display.print("BUTTON TO");  
+  display.setCursor(0, lineSpace2 * 2);
+  display.print("CONFIRM!");
+  display.display();
+  
+  delay(2000);
+  display.clearDisplay();  
+  display.display();
+
+  if (digitalRead(encoder0Press) == LOW) return 1;        // if button still pressed
+  return 0;
+}
+
+
+//  --------------------------------------
+
+
 // set menu item
 // pass: new menu items number, name         (blank iname clears all entries)
 
@@ -355,6 +370,7 @@ void setMenu(byte inum, String iname) {
 
 
 //  --------------------------------------
+
 
 // display menu on oled
 void staticMenu() {
@@ -385,7 +401,49 @@ void staticMenu() {
   display.display();          // update display
 }
 
+
 //  --------------------------------------
+
+// display time/date on oled
+
+void displayTimeOLED() {
+
+   // time
+     time_t t=now();                                  // get current time 
+     String ttime = String(hour(t)) + ":" ;           // hours
+     if (minute(t) < 10) ttime += "0";                // minutes
+     ttime += String(minute(t));
+//     String tseconds = " ";                            // seconds
+//     int tsec = second(t);
+//     if (tsec < 10) tseconds += "0"; 
+//     tseconds += String(tsec);
+
+   // date
+     const String tDoW[] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
+     String tday = tDoW[weekday(t)-1];                                                         // day of week
+     String tdate = String(day(t)) + "/" + String(month(t)) + "/" + String(year(t)) + " ";    // date
+
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print(ttime);
+//    display.setTextSize(1);
+//    display.print(tseconds);
+//    display.setTextSize(2);
+    display.setCursor(0, topLine);
+    display.print(tday);
+    display.setCursor(0, topLine + lineSpace2);
+    display.print(tdate);
+    display.setTextSize(1);
+    display.setCursor(20, display.height() - lineSpace1);
+    display.print(WiFi.localIP());
+    display.display();
+}
+
+
+//  --------------------------------------
+
 
 // rotary encoder button
 //    returns 1 if the button status has changed since last time
@@ -586,21 +644,39 @@ int chooseFromList(byte noOfElements, String listTitle, String list[]) {
 // ----------------------------------------------
 
 
-// rotary encoder interrupt routine to update counter when turned
-//    debounced - this interrupt triggers when pin a changes, at this time pin b will always be stable so only count  
-//                it if pin b has changed - see http://www.technoblogy.com/show?1YHJ
 
- ICACHE_RAM_ATTR void doEncoder() {
+// rotary encoder interrupt routine to update position counter when turned
+interrupt info: https://www.gammon.com.au/forum/bbshowpost.php?id=11488
+
+#if defined ESP32
+  void IRAM_ATTR doEncoder() {
+#else    // ESP8266
+  void ICACHE_RAM_ATTR doEncoder() {
+#endif
+     
   bool pinA = digitalRead(encoder0PinA);
   bool pinB = digitalRead(encoder0PinB);
-  if (pinA != encoderPrevA) {
+
+  if ( (encoderPrevA == pinA && encoderPrevB == pinB) ) return;  // no change since last time (i.e. reject bounce)
+
+  // same direction (alternating between 0,1 and 1,0 in one direction or 1,1 and 0,0 in the other direction)
+         if (encoderPrevA == 1 && encoderPrevB == 0 && pinA == 0 && pinB == 1) encoder0Pos -= 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 1 && pinA == 1 && pinB == 0) encoder0Pos -= 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 0 && pinA == 1 && pinB == 1) encoder0Pos += 1;
+    else if (encoderPrevA == 1 && encoderPrevB == 1 && pinA == 0 && pinB == 0) encoder0Pos += 1;
+    
+  // change of direction
+    else if (encoderPrevA == 1 && encoderPrevB == 0 && pinA == 0 && pinB == 0) encoder0Pos += 1;   
+    else if (encoderPrevA == 0 && encoderPrevB == 1 && pinA == 1 && pinB == 1) encoder0Pos += 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 0 && pinA == 1 && pinB == 0) encoder0Pos -= 1;
+    else if (encoderPrevA == 1 && encoderPrevB == 1 && pinA == 0 && pinB == 1) encoder0Pos -= 1;
+
+    else if (serialDebug) Serial.println("Error: invalid rotary encoder pin state - prev=" + String(encoderPrevA) + "," 
+                                          + String(encoderPrevB) + " new=" + String(pinA) + "," + String(pinB));
+    
+  // update previous readings
     encoderPrevA = pinA;
-    if (pinB != encoderPrevB) {
-      encoderPrevB = pinB;
-      if (pinA == pinB) encoder0Pos += 1;
-      else encoder0Pos -= 1;
-    }
-  }
+    encoderPrevB = pinB;
 }
 
 
