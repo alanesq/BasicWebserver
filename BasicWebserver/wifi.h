@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections - 05Dec20
+ *      Wifi / NTP Connections - 15Dec20
  *      
  *      part of the BasicWebserver sketch
  *             
@@ -10,6 +10,8 @@
  *                      ESP_Wifimanager - https://github.com/khoih-prog/ESP_WiFiManager
  *                      TimeLib
  *                      ESPmDNS
+ * 
+ *      Notes:  Alternative NTP method: https://lastminuteengineers.com/esp32-ntp-server-date-time-tutorial/
  *                    
  *  
  **************************************************************************************************/
@@ -26,7 +28,7 @@
       // String portalName = stitle;                                              // use sketch title
 
     // mDNS name
-      const String mDNS_name = "esp1";
+      const String mDNS_name = "espserver";
       // const String mDNS_name = stitle;                                         // use sketch title
       
 
@@ -83,22 +85,21 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   #include <ESP_WiFiManager.h>      
 
 
-
 // Time from NTP server
 //      from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
   #include <TimeLib.h>
-  #include <WiFiUdp.h>                         // UDP library which is how we communicate with Time Server
+  #include <WiFiUdp.h>                          // UDP library which is how we communicate with Time Server
   const uint16_t localPort = 8888;              // Just an open port we can use for the UDP packets coming back in
   const char timeServer[] = "uk.pool.ntp.org"; 
   const uint16_t NTP_PACKET_SIZE = 48;          // NTP time stamp is in the first 48 bytes of the message
-  byte packetBuffer[NTP_PACKET_SIZE];          // buffer to hold incoming and outgoing packets
-  WiFiUDP NTPUdp;                              // A UDP instance to let us send and receive packets over UDP
+  byte packetBuffer[NTP_PACKET_SIZE];           // buffer to hold incoming and outgoing packets
+  WiFiUDP NTPUdp;                               // A UDP instance to let us send and receive packets over UDP
   const uint16_t timeZone = 0;                  // timezone (0=GMT)
   const String DoW[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
   // How often to resync the time (under normal and error conditions)
     const uint16_t _resyncSeconds = 7200;       // 7200 = 2 hours
     const uint16_t _resyncErrorSeconds = 60;    // 60 = 1 min
-  bool NTPok = 0;                              // Flag if NTP is curently connecting ok
+  bool NTPok = 0;                               // Flag if NTP is curently connecting ok
 
 
 
@@ -108,8 +109,8 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
 
 void startWifiManager() {
 
-  // ClearWifimanagerSettings();               // Erase stored wifi configuration (wifimanager)
-  // ESP_wifiManager.resetSettings();
+  // erase stored wifi settings - Note - this may wipe the whole sketch - seems to be a bug/problem with wiping stored config?
+  // ClearWifimanagerSettings();
  
   uint32_t startedAt = millis();
 
@@ -118,6 +119,8 @@ void startWifiManager() {
   ESP_wifiManager.setMinimumSignalQuality(-1);
 
   ESP_wifiManager.setDebugOutput(true);
+
+  ESP_wifiManager.setConfigPortalTimeout(600);       // Config portal timeout  
 
   // wifimanager config portal settings
     ESP_wifiManager.setSTAStaticIPConfig(IPAddress(192,168,2,114), IPAddress(192,168,2,1), IPAddress(255,255,255,0), 
@@ -131,73 +134,63 @@ void startWifiManager() {
   
   //  Serial.println("Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);    // show stored wifi password
 
-  // if no stored wifi credentials open config portal
-  if (Router_SSID == "") {   
-    Serial.println("No stored access point credentials, starting access point"); 
-    ESP_wifiManager.setConfigPortalTimeout(600);       // Config portal timeout  
-    if (ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str())) Serial.println("Portal config sucessful");
-    else Serial.println("Portal config failed");    
-    delay(1000);
-    ESP.restart();                                           // reboot and try again
-    delay(5000);                                             // restart will fail without this delay
-  }
+  // if no stored wifi credentials found, open config portal
+    if (Router_SSID == "") {  
+      // open wifimanager config portal   
+        Serial.println("\nOpening config portal");
+        ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str());
+        delay(1000);
+        ESP.restart();         // reboot 
+        delay(5000);           // restart will fail without this delay
+    }
 
-  // connect to wifi
-    #define WIFI_CONNECT_TIMEOUT        30000L
-    #define WHILE_LOOP_DELAY            200L
-    #define WHILE_LOOP_STEPS            (WIFI_CONNECT_TIMEOUT / ( 3 * WHILE_LOOP_DELAY ))
-    
-    startedAt = millis();
-    
-    while ( (WiFi.status() != WL_CONNECTED) && (millis() - startedAt < WIFI_CONNECT_TIMEOUT ) )
-    {   
+    // connect to wifi
+      #define WIFI_CONNECT_TIMEOUT        30000L
+      #define WHILE_LOOP_DELAY            200L
+      #define WHILE_LOOP_STEPS            (WIFI_CONNECT_TIMEOUT / ( 3 * WHILE_LOOP_DELAY ))
       WiFi.mode(WIFI_STA);
       WiFi.persistent (true);
-      Serial.print("Connecting to ");
+      Serial.print("\nConnecting to ");
       Serial.println(Router_SSID);
       WiFi.begin(Router_SSID.c_str(), Router_Pass.c_str());
+      startedAt = millis();
       int i = 0;
-      while((!WiFi.status() || WiFi.status() >= WL_DISCONNECTED) && i++ < WHILE_LOOP_STEPS) delay(WHILE_LOOP_DELAY);   
-    }
+      while((!WiFi.status() || WiFi.status() >= WL_DISCONNECTED) && i++ < WHILE_LOOP_STEPS) {
+        delay(WHILE_LOOP_DELAY);   
+        Serial.print(".");
+      }
+      Serial.print("\nAfter waiting ");
+      Serial.print((millis()- startedAt) / 1000);
+      Serial.print(" secs. connection result is: ");
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.print("connected. Local IP: ");
+        Serial.println(WiFi.localIP());
+        wifiok = 1;     // flag wifi connected ok
+      } else {
+        Serial.println("Failed to connect to Wifi");
+        Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+        wifiok = 0;     // flag wifi failed
+      }
   
-    Serial.print("After waiting ");
-    Serial.print((millis()- startedAt) / 1000);
-    Serial.print(" secs more in setup() connection result is: \n ");
-  
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.print("connected. Local IP: ");
-      Serial.println(WiFi.localIP());
-      wifiok = 1;     // flag wifi now ok
-    } else {
-      Serial.println("Failed to connect to Wifi");
-      Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+  if (wifiok == 0) {           // if wifi is not connected 
+    // open wifimanager config portal  
+      // open wifimanager config portal   
+        Serial.println("\nOpening config portal");
+        ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str());
+        delay(1000);
+        ESP.restart();         // reboot 
+        delay(5000);           // restart will fail without this delay
+      }
           
-      // open config portal 
-      ESP_wifiManager.setConfigPortalTimeout(120);       // Config portal timeout
-      if (!ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str())) {
-        wifiok = 0;     // flag wifi not connected
-        Serial.println("failed to connect to wifi / access point timed out so rebooting to try again...");
-        delay(500);
-        ESP.restart();                                           // reboot and try again
-        delay(5000);                                             // restart will fail without this delay
-      }
-      else {
-        Serial.println("Wifi connected");
-        wifiok = 1;     // flag wifi now ok
-      }
-    }  
-
-
   // Set up mDNS responder:
     Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
 
-    
   // start NTP
     NTPUdp.begin(localPort);                  // What port will the UDP/NTP packet respond on?
     setSyncProvider(getNTPTime);              // What is the function that gets the time (in ms since 01/01/1900)?
     setSyncInterval(_resyncErrorSeconds);     // How often should we synchronise the time on this machine (in seconds) 
            
-}
+}  // startwifimanager
 
 
 // ----------------------------------------------------------------
@@ -386,9 +379,10 @@ time_t getNTPTime() {
 //                        request a web page
 // ----------------------------------------------------------------
 
-//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive     e.g. requestWebPage("192.168.1.166","/log",80,600);
+//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
+//          e.g. requestWebPage("192.168.1.166","/log",80,600,"");
 
-String requestWebPage(String ip, String page, int port, int maxChars){
+String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
 
   int maxWaitTime = 3000;                 // max time to wait for reply (ms)
 
@@ -428,70 +422,65 @@ String requestWebPage(String ip, String page, int port, int maxChars){
     // read the response
       while ( client.available() && received_counter < maxChars ) {
         #if defined ESP8266
-          delay(2);                            // it just reads 255s on esp8266 if this delay is not included
+          delay(2);                          // it just reads 255s on esp8266 if this delay is not included
         #endif        
         received[received_counter] = char(client.read());     // read one character
         received_counter+=1;
       }
       received[received_counter] = '\0';     // end of string marker
-      
-//      // read the response in to a string
-//      String wpage = "";
-//      // read response in to wpage
-//        while (client.available() && maxChars > 0) {
-//          #if defined ESP8266
-//            delay(2);                            // just reads 255s on esp8266 if this delay is not included
-//          #endif
-//          wpage += char(client.read());          // read one character
-//          maxChars--;
-//        }
-        
-////    alternative way to read the data
-//      int rTimeout = 1500;                       // timeout waiting for reply data (ms)
-//      client.setTimeout(rTimeout);               // timeout for readString() command
-//      String wpage = client.readString();        // just read all incoming data until timeout is reached
-
-      
+            
     if (serialDebug) {
       Serial.println("--------received web page-----------");
       Serial.println(received);
       Serial.println("------------------------------------");
-      Serial.flush();     // wait for data to finish sending
+      Serial.flush();     // wait for serial data to finish sending
     }
     
     client.stop();    // close connection
     if (serialDebug) Serial.println("Connection closed");
 
-//    // extract just the content between the <body> html tags
-//      int bodyStart = wpage.indexOf("<body>");
-//      int bodyFinish = wpage.indexOf("</body>");
-//      if ( bodyStart > 0 && bodyFinish > bodyStart) {
-//        // body section found in reply
-//        wpage = wpage.substring(bodyStart + 6, bodyFinish);
-//      }
+    // if cuttoffText was supplied then only return the text following this 
+      if (cuttoffText != "") {
+        char* locus = strstr(received,cuttoffText.c_str());    // locus = pointer to the found text
+        if (locus) {                                           // if text was found
+          if (serialDebug) Serial.println("The text '" + cuttoffText + "' was found in reply");
+          return locus;                                        // return the reply text following 'cuttoffText'
+        } else if (serialDebug) Serial.println("The text '" + cuttoffText + "' WAS NOT found in reply");
+      }
     
-  return received;        // return the response as a String
+  return received;        // return the full reply text
 }
 
 
 //-----------------------------------------------------------------------------
 //                     Clear stored wifi settings (Wifimanager)
 //-----------------------------------------------------------------------------
-//
+// Note - this may wipe the whole sketch - seems to be a bug/problem with wiping stored config?
 
 void ClearWifimanagerSettings() {
 
-#if defined ESP32
+  #if defined ESP32
     // clear stored wifimanager settings
           Serial.println("Clearing stored wifimanager settings");
           wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT(); //load the flash-saved configs
           esp_wifi_init(&cfg); //initiate and allocate wifi resources (does not matter if connection fails)
           delay(2000); //wait a bit
-          if(esp_wifi_restore()!=ESP_OK)  Serial.println("WiFi is not initialized by esp_wifi_init");
-          else Serial.println("Cleared!");
-          Serial.println("System stopped...");
-          while(1);   // stop
-#endif
+          if(esp_wifi_restore()!=ESP_OK)  Serial.println("\nWiFi is not initialized by esp_wifi_init");
+  #endif
+
+  #ifdef ESP8266  
+    WiFi.disconnect(true);
+  #else
+    WiFi.disconnect(true, true);
+  #endif
+
+  ESP_WiFiManager ESP_wifiManager(stitle);    
+  ESP_wifiManager.resetSettings();
+  
+  Serial.println("\nRestarting!");
+  delay(1000);
+  ESP.restart();         // reboot 
+  delay(5000);           // restart will fail without this delay
 
 }
 
