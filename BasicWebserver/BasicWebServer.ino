@@ -16,8 +16,8 @@
  *             You can then add them in the Boards Manager.
  *             ESP8266 addon package used = v2.5.2     (I find problems if using a newer version)
  *          
- *      First time the ESP starts it will create an access point "ESPConfig" which you need to connect to in order to enter your wifi details.  
- *             default password = "12345678"   (note-it may not work if anything other than 8 characters long for some reason?)
+ *      First time the ESP starts it will create an access point "ESPPortal" which you need to connect to in order to enter your wifi details.  
+ *             default password = "12345678"   (change these in wifi.h)
  *             see: https://randomnerdtutorials.com/wifimanager-with-esp8266-autoconnect-custom-parameter-and-manage-your-ssid-and-password
  *
  * 
@@ -38,6 +38,11 @@
  *      
  ********************************************************************************************************************/
 
+#if (!defined ESP8266 && !defined ESP32)
+  #error This sketch is for an esp8266 or esp32 only
+#endif
+
+
 // ---------------------------------------------------------------
 //                          -SETTINGS
 // ---------------------------------------------------------------
@@ -45,11 +50,9 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "05Dec20";                      // version of this sketch
+  const char* sversion = "13Jan21";                      // version of this sketch
 
-  const char* MDNStitle = "ESP1";                        // Mdns title (use http://<MDNStitle>.local )
-
-  #define ENABLE_OLED 0                                  // Enable OLED display  
+  #define ENABLE_OLED 1                                  // Enable OLED display  
 
   #define ENABLE_EMAIL 0                                 // Enable E-mail  
   
@@ -122,29 +125,31 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 
 void setup(void) {
     
-  Serial.begin(serialSpeed);                                   // serial port
-  delay(200);
+  if (serialDebug) {
+    Serial.begin(serialSpeed);                                   // serial port
+    delay(200);
 
-  Serial.println("\n\n\n");                                    // line feeds
-  Serial.println("-----------------------------------");
-  Serial.printf("Starting - %s - %s \n", stitle, sversion);
-  Serial.println("-----------------------------------");
-  Serial.println( "ESP type: " + ESPType );
-  // Serial.println(ESP.getFreeSketchSpace());
-  #if defined(ESP8266)     
-    Serial.println("Chip ID: " + ESP.getChipId());
-    rst_info *rinfo = ESP.getResetInfoPtr();
-    Serial.println("ResetInfo: " + String((*rinfo).reason) + ": " + ESP.getResetReason());
-    Serial.printf("Flash chip size: %d (bytes)\n", ESP.getFlashChipRealSize());
-    Serial.printf("Flash chip frequency: %d (Hz)\n", ESP.getFlashChipSpeed());
-    Serial.printf("\n");
-  #endif
+    Serial.println("\n\n\n");                                    // line feeds
+    Serial.println("-----------------------------------");
+    Serial.printf("Starting - %s - %s \n", stitle, sversion);
+    Serial.println("-----------------------------------");
+    Serial.println( "Device type: " + String(ARDUINO_BOARD) + ", chip id: " + String(ESP_getChipId(), HEX));
+    // Serial.println(ESP.getFreeSketchSpace());
+    #if defined(ESP8266)     
+        Serial.println("Chip ID: " + ESP.getChipId());
+        rst_info *rinfo = ESP.getResetInfoPtr();
+        Serial.println("ResetInfo: " + String((*rinfo).reason) + ": " + ESP.getResetReason());
+        Serial.printf("Flash chip size: %d (bytes)\n", ESP.getFlashChipRealSize());
+        Serial.printf("Flash chip frequency: %d (Hz)\n", ESP.getFlashChipSpeed());
+        Serial.printf("\n");
+    #endif
+  }
 
   #if ENABLE_OLED
     oledSetup();         // initialise the oled display
   #endif
  
-  // Serial.setDebugOutput(true);                                // enable extra diagnostic info  
+  // if (serialDebug) Serial.setDebugOutput(true);                                // enable extra diagnostic info  
    
   // configure the onboard LED
     pinMode(led, OUTPUT); 
@@ -154,11 +159,6 @@ void setup(void) {
     // pinMode(onboardButton, INPUT); 
 
   startWifiManager();                                            // Connect to wifi (procedure is in wifi.h)
-
-  // start MDNS - see https://tttapa.github.io/ESP8266/Chap08%20-%20mDNS.html
-  if (MDNS.begin(MDNStitle)) {
-    Serial.println("MDNS responder started");
-  }
   
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
@@ -166,7 +166,7 @@ void setup(void) {
     //    WiFi.softAP("ESP-AP", "password");               // access point settings (Note: password must be 8 characters for some reason - this may no longer be true?)
     //    WiFi.mode(WIFI_AP_STA);                          // enable as both Station and access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    IPAddress myIP = WiFi.softAPIP();
-    //    Serial.print("Access Point Started - IP address: ");
+    //    if (serialDebug) Serial.print("Access Point Started - IP address: ");
     //    Serial.println(myIP);
   
   // Stop wifi going to sleep (if enabled it causes wifi to drop out randomly especially on esp8266 boards)
@@ -186,12 +186,12 @@ void setup(void) {
     server.onNotFound(handleNotFound);       // invalid page requested
   
   // start web server
-    Serial.println("Starting web server");
+    if (serialDebug) Serial.println("Starting web server");
     server.begin();
 
   // Finished connecting to network
     digitalWrite(led, ledOFF);
-    // log_system_message(stitle + " Has Started");  
+    log_system_message("Started");
 
 }
 
@@ -290,7 +290,7 @@ void handleRoot() {
     client.printf("<FORM action='%s' method='post'>\n", HomeLink);     // used by the buttons (action = the page send it to)
     client.write("<P>");                                               // start of section
 
-    client.printf("Welcome to the demo %s web page\n", ESPType.c_str());
+    client.print("Welcome to the BasicWebServer, running on a " + String(ARDUINO_BOARD) + "\n");
 
     // insert an iframe containing the changing data (updates every few seconds using javascript)
       client.write("<br><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
@@ -362,9 +362,7 @@ void handlePing(){
 
   log_system_message("ping web page requested");      
   String message = "ok";
-
   server.send(404, "text/plain", message);   // send reply as plain text
-  message = "";      // clear variable
   
 }
 
@@ -389,11 +387,14 @@ void handleTest(){
 
 
 
-      // demo of how to request a web page
-        String webpage = requestWebPage("192.168.1.166","/log",80,800);
-        Serial.println(webpage);
-  
 
+
+
+
+//      // demo of how to request a web page
+//        String webpage = requestWebPage("192.168.1.166","/log",80,800,"<html>");
+//        if (serialDebug) Serial.println(webpage);
+      
        
   // -----------------------------------------------------------------------------
 
@@ -402,8 +403,6 @@ void handleTest(){
     webfooter(client);            // add the standard web page footer
     delay(1);
     client.stop();
-
-  
 }
 
 

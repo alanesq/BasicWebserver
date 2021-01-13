@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections - 15Dec20
+ *      Wifi / NTP Connections using WifiManager - 13Jan21
  *      
  *      part of the BasicWebserver sketch
  *             
@@ -10,8 +10,6 @@
  *                      ESP_Wifimanager - https://github.com/khoih-prog/ESP_WiFiManager
  *                      TimeLib
  *                      ESPmDNS
- * 
- *      Notes:  Alternative NTP method: https://lastminuteengineers.com/esp32-ntp-server-date-time-tutorial/
  *                    
  *  
  **************************************************************************************************/
@@ -22,13 +20,11 @@
 
     
     // Configuration Portal (Wifimanager)
-      const String portalName = "espserver";
-      const String portalPassword = "12345678";
-      // String portalName = "ESP_" + String(ESP_getChipId(), HEX);               // use chip id
-      // String portalName = stitle;                                              // use sketch title
+      String AP_SSID = "ESPPortal";
+      String AP_PASS = "12345678";    
 
     // mDNS name
-      const String mDNS_name = "espserver";
+      // const String mDNS_name = "esp32";
       // const String mDNS_name = stitle;                                         // use sketch title
       
 
@@ -42,47 +38,37 @@
   bool IsBST();
   void sendNTPpacket();
   time_t getNTPTime();
-  void ClearWifimanagerSettings();
   String requestWebPage(String, String, int, int);
   
+bool wifiok = 0;                // flag if wifi connection is ok
+
 
 // ----------------------------------------------------------------
 //                              -Startup
 // ----------------------------------------------------------------
-
-byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   
 // wifi for esp8266/esp32
-  #if defined ESP32
+    #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
-    //#include "HTTPClient.h"             // used by requestwebpage()
     #include <WiFiClient.h>
     #include <WebServer.h>
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
     WebServer server(ServerPort);
-    #include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS      
-    const String ESPType = "ESP32";
+    //#include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS      
   #elif defined ESP8266
-    #include <ESP8266WiFi.h>            // https://github.com/esp8266/Arduino
-    //#include "ESP8266HTTPClient.h"      // used by requestwebpage()
+    #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+    //needed for library
     #include <DNSServer.h>
-    #include <ESP8266WebServer.h>  
+    #include <ESP8266WebServer.h>
     #define ESP_getChipId()   (ESP.getChipId())
     ESP8266WebServer server(ServerPort);
-    #include <ESP8266mDNS.h>
-    const String ESPType = "ESP8266";
+    //#include <ESP8266mDNS.h>
   #else
       #error "This sketch only works with the ESP8266 or ESP32"
   #endif
  
-  // SSID and Password for wifi 
-    String Router_SSID;
-    String Router_Pass;
-
-  #define USE_AVAILABLE_PAGES false      // Use false if you don't like to display Available Pages in Information Page of Config Portal
-  
-  #include <ESP_WiFiManager.h>      
+  #include <ESP_WiFiManager.h>              //https://github.com/khoih-prog/ESP_WiFiManager   
 
 
 // Time from NTP server
@@ -99,8 +85,6 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
   // How often to resync the time (under normal and error conditions)
     const uint16_t _resyncSeconds = 7200;       // 7200 = 2 hours
     const uint16_t _resyncErrorSeconds = 60;    // 60 = 1 min
-  bool NTPok = 0;                               // Flag if NTP is curently connecting ok
-
 
 
 // ----------------------------------------------------------------
@@ -109,86 +93,48 @@ byte wifiok = 0;          // flag if wifi is connected ok (1 = ok)
 
 void startWifiManager() {
 
-  // erase stored wifi settings - Note - this may wipe the whole sketch - seems to be a bug/problem with wiping stored config?
-  // ClearWifimanagerSettings();
- 
-  uint32_t startedAt = millis();
+  // Connect to Wifi using WifiManager
+    ESP_WiFiManager ESP_wifiManager("AutoConnectAP");
+    // ESP_wifiManager.resetSettings();         // erase stored wifimanager settings
+    ESP_wifiManager.setConfigPortalTimeout(120);
+    ESP_wifiManager.setDebugOutput(true);   
 
-  ESP_WiFiManager ESP_wifiManager(stitle);     
-  
-  ESP_wifiManager.setMinimumSignalQuality(-1);
+    // get stored wifi settings
+      String Router_SSID = ESP_wifiManager.WiFi_SSID();    
+      String Router_Pass = ESP_wifiManager.WiFi_Pass();
+      if (Router_SSID == "") if (serialDebug) Serial.println("There are no wifi settings stored");
 
-  ESP_wifiManager.setDebugOutput(true);
-
-  ESP_wifiManager.setConfigPortalTimeout(600);       // Config portal timeout  
-
-  // wifimanager config portal settings
-    ESP_wifiManager.setSTAStaticIPConfig(IPAddress(192,168,2,114), IPAddress(192,168,2,1), IPAddress(255,255,255,0), 
-                                         IPAddress(192,168,2,1), IPAddress(8,8,8,8));
-  
-  // We can't use WiFi.SSID() in ESP32as it's only valid after connected. 
-  // SSID and Password stored in ESP32 wifi_ap_record_t and wifi_config_t are also cleared in reboot
-  // Have to create a new function to store in EEPROM/SPIFFS for this purpose
-    Router_SSID = ESP_wifiManager.WiFi_SSID();
-    Router_Pass = ESP_wifiManager.WiFi_Pass();
-  
-  //  Serial.println("Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);    // show stored wifi password
-
-  // if no stored wifi credentials found, open config portal
-    if (Router_SSID == "") {  
-      // open wifimanager config portal   
-        Serial.println("\nOpening config portal");
-        ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str());
-        delay(1000);
-        ESP.restart();         // reboot 
-        delay(5000);           // restart will fail without this delay
-    }
-
-    // connect to wifi
-      #define WIFI_CONNECT_TIMEOUT        30000L
-      #define WHILE_LOOP_DELAY            200L
-      #define WHILE_LOOP_STEPS            (WIFI_CONNECT_TIMEOUT / ( 3 * WHILE_LOOP_DELAY ))
-      WiFi.mode(WIFI_STA);
-      WiFi.persistent (true);
-      Serial.print("\nConnecting to ");
-      Serial.println(Router_SSID);
+    // try connecting to wifi
+      if (serialDebug) Serial.println("Connecting to wifi using WifiManager");
       WiFi.begin(Router_SSID.c_str(), Router_Pass.c_str());
-      startedAt = millis();
-      int i = 0;
-      while((!WiFi.status() || WiFi.status() >= WL_DISCONNECTED) && i++ < WHILE_LOOP_STEPS) {
-        delay(WHILE_LOOP_DELAY);   
-        Serial.print(".");
-      }
-      Serial.print("\nAfter waiting ");
-      Serial.print((millis()- startedAt) / 1000);
-      Serial.print(" secs. connection result is: ");
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.print("connected. Local IP: ");
-        Serial.println(WiFi.localIP());
-        wifiok = 1;     // flag wifi connected ok
-      } else {
-        Serial.println("Failed to connect to Wifi");
-        Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
-        wifiok = 0;     // flag wifi failed
-      }
-  
-  if (wifiok == 0) {           // if wifi is not connected 
-    // open wifimanager config portal  
-      // open wifimanager config portal   
-        Serial.println("\nOpening config portal");
-        ESP_wifiManager.startConfigPortal((const char *) portalName.c_str(), portalPassword.c_str());
-        delay(1000);
-        ESP.restart();         // reboot 
-        delay(5000);           // restart will fail without this delay
-      }
-          
-  // Set up mDNS responder:
-    Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
 
-  // start NTP
-    NTPUdp.begin(localPort);                  // What port will the UDP/NTP packet respond on?
-    setSyncProvider(getNTPTime);              // What is the function that gets the time (in ms since 01/01/1900)?
-    setSyncInterval(_resyncErrorSeconds);     // How often should we synchronise the time on this machine (in seconds) 
+    // if unable to connect to wifi start config portal  
+      if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+        if (serialDebug) Serial.println("Unable to connect to WiFi - starting Wifimanager config portal");
+        if ( !ESP_wifiManager.startConfigPortal(AP_SSID.c_str(), AP_PASS.c_str()) ) {
+          if (serialDebug) Serial.println("Not connected to WiFi - rebooting");
+          delay(1000);
+          ESP.restart();  
+          delay(5000);           // restart will fail without this delay
+        }
+      }    
+
+    // finished connecting to wifi (it should be connected at this point)
+      if (WiFi.status() == WL_CONNECTED) {
+        if (serialDebug) Serial.print("connected to wifi. Local IP: ");
+        if (serialDebug) Serial.println(WiFi.localIP());
+        wifiok = 1;  
+      } else {
+        if (serialDebug) Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+      }  
+          
+//    // Set up mDNS responder:
+//      if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
+
+    // start NTP
+      NTPUdp.begin(localPort); 
+      setSyncProvider(getNTPTime);              // the function that gets the time (in ms since 01/01/1900)?
+      setSyncInterval(_resyncErrorSeconds);     // How often to synchronise the time (in seconds) 
            
 }  // startwifimanager
 
@@ -200,6 +146,8 @@ void startWifiManager() {
 String currentTime(){
 
    time_t t=now();     // get current time 
+   
+   if (year(t) < 2021) return "Time Unknown";
 
    if (IsBST()) t+=3600;     // add one hour if it is Summer Time
 
@@ -219,7 +167,7 @@ String currentTime(){
 //                           -British Summer Time check
 //-----------------------------------------------------------------------------
 // returns true if it is British Summer time
-//         code from https://my-small-projects.blogspot.com/2015/05/arduino-checking-for-british-summer-time.html
+// code from https://my-small-projects.blogspot.com/2015/05/arduino-checking-for-british-summer-time.html
 
 boolean IsBST()
 {
@@ -270,7 +218,6 @@ boolean IsBST()
 }
 
 
-
 //-----------------------------------------------------------------------------
 //        send an NTP request to the time server at the given address
 //-----------------------------------------------------------------------------
@@ -306,19 +253,17 @@ void sendNTPpacket(const char* address) {
 }
 
 
-
 //-----------------------------------------------------------------------------
 //                contact the NTP pool and retrieve the time
 //-----------------------------------------------------------------------------
-//
-// code from https://github.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP
 
 time_t getNTPTime() {
 
   // Send a UDP packet to the NTP pool address
   if (serialDebug) {
     Serial.print("\nSending NTP packet to ");
-    Serial.println(timeServer);
+    Serial.print(timeServer);
+    Serial.print(": ");
   }
   sendNTPpacket(timeServer);
 
@@ -328,7 +273,6 @@ time_t getNTPTime() {
   int timeOutCnt = 0;
   while (NTPUdp.parsePacket() == 0 && ++timeOutCnt < (UDPtimeoutSecs * 10)){
     delay(100);
-    // yield();
   }
 
   // Is there UDP data present to be processed? Sneak a peek!
@@ -350,7 +294,6 @@ time_t getNTPTime() {
     }
 
     // now convert NTP time into everyday time:
-    //Serial.print("Unix time = ");
 
     // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
     const unsigned long seventyYears = 2208988800UL;     // UL denotes it is 'unsigned long' 
@@ -360,27 +303,23 @@ time_t getNTPTime() {
 
     // Reset the interval to get the time from NTP server in case we previously changed it
     setSyncInterval(_resyncSeconds);
-    NTPok = 1;       // flag NTP is currently connecting ok
 
     return epoch;
   }
 
   // Failed to get an NTP/UDP response
-    if (serialDebug) Serial.println("No NTP response");
+    if (serialDebug) Serial.println("No NTP response received");
     setSyncInterval(_resyncErrorSeconds);       // try more frequently until a response is received
-    NTPok = 0;                                  // flag NTP not currently connecting
 
     return 0;
-  
 }
 
 
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-
-//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
-//          e.g. requestWebPage("192.168.1.166","/log",80,600,"");
+// parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
+//     e.g. requestWebPage("192.168.1.166", "/log", 80, 600, "");
 
 String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
 
@@ -418,12 +357,11 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
       while ( !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
         delay(10);
       }
+      if ( ((uint32_t)(millis() - ttimer) > maxWaitTime ) && serialDebug) Serial.println("-Timed out");
 
     // read the response
       while ( client.available() && received_counter < maxChars ) {
-        #if defined ESP8266
-          delay(2);                          // it just reads 255s on esp8266 if this delay is not included
-        #endif        
+        delay(4); 
         received[received_counter] = char(client.read());     // read one character
         received_counter+=1;
       }
@@ -449,39 +387,6 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
       }
     
   return received;        // return the full reply text
-}
-
-
-//-----------------------------------------------------------------------------
-//                     Clear stored wifi settings (Wifimanager)
-//-----------------------------------------------------------------------------
-// Note - this may wipe the whole sketch - seems to be a bug/problem with wiping stored config?
-
-void ClearWifimanagerSettings() {
-
-  #if defined ESP32
-    // clear stored wifimanager settings
-          Serial.println("Clearing stored wifimanager settings");
-          wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT(); //load the flash-saved configs
-          esp_wifi_init(&cfg); //initiate and allocate wifi resources (does not matter if connection fails)
-          delay(2000); //wait a bit
-          if(esp_wifi_restore()!=ESP_OK)  Serial.println("\nWiFi is not initialized by esp_wifi_init");
-  #endif
-
-  #ifdef ESP8266  
-    WiFi.disconnect(true);
-  #else
-    WiFi.disconnect(true, true);
-  #endif
-
-  ESP_WiFiManager ESP_wifiManager(stitle);    
-  ESP_wifiManager.resetSettings();
-  
-  Serial.println("\nRestarting!");
-  delay(1000);
-  ESP.restart();         // reboot 
-  delay(5000);           // restart will fail without this delay
-
 }
 
 

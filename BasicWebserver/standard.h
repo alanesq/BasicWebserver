@@ -49,7 +49,7 @@ void log_system_message(String smes) {
     system_message[LogNumber] = currentTime() + " - " + smes;
   
   // also send message to serial port
-    if (serialDebug) Serial.println(system_message[LogNumber]);
+    if (serialDebug) Serial.println("Log:" + system_message[LogNumber]);
 }
 
 
@@ -58,35 +58,38 @@ void log_system_message(String smes) {
 //                         -header (html) 
 // ----------------------------------------------------------------
 // HTML at the top of each web page
-//    additional style settings can be included
+//    additional style settings can be included and auto page refresh rate
 
 
-void webheader(WiFiClient &client, char style[] = " ") {
+void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
 
-      client.write("<!DOCTYPE html>\n");
-      client.write(  "<html lang='en'>\n");
-      client.write(     "<head>\n");
-      client.write(       "<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-      client.write(       "<link rel=\'icon\' href=\'data:,\'>\n");
-      client.printf(      "<title> %s </title>\n", stitle);                            // insert sketch title
-      client.write(       "<style>\n");                                                // Settings here for the top of screen menu appearance 
-      client.write(         "ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);}\n");
-      client.write(         "li {float: left;}\n");
-      client.write(         "li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n");
-      client.write(         "li a:hover { background-color: rgb(100, 0, 0);}\n" );
-      client.printf(      "%s\n", style);                                              // insert aditional style if supplied 
-      client.write(       "</style>\n");
-      client.write(     "</head>\n");
-      client.write(     "<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n");
-      client.write(       "<ul>\n");
-      client.printf(        "<li><a href='%s'>Home</a></li>\n", HomeLink);             // home page url
-      client.write(         "<li><a href='/log'>Log</a></li>\n");                      // log menu button 
-      client.printf(        "<h1> <font color='#FF0000'>%s</h1></font>\n", stitle);    // sketch title
-      client.write(       "</ul>\n");
-
+  client.print (R"=====(
+    <!DOCTYPE html>
+    <html lang='en'>
+    <head>
+      <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  )=====");
+  if (refresh > 0) client.print( "<meta http-equiv='refresh' content='" + String(refresh) + "'>\n");    // auto refresh page
+  client.printf("<title> %s </title>\n", stitle);                                                       // insert sketch title
+  client.print (R"=====(
+    <style> 
+      ul {list-style-type: none; margin: 0; padding: 0; overflow: hidden; background-color: rgb(128, 64, 0);} 
+      li {float: left;}
+      li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}
+      li a:hover { background-color: rgb(100, 0, 0);}
+  )=====");
+  client.print(style);                                                                                  // insert aditional style if supplied 
+  client.print (R"=====(
+    </style>
+    </head>
+      <body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>
+      <ul>
+  )=====");
+  client.printf("<li><a href='%s'>Home</a></li>", HomeLink);                                          // home page url
+  client.print("<li><a href='/log'>Log</a></li>");                                                    // log menu button 
+  client.printf("<h1> <font color='#FF0000'>%s</h1></font>", stitle);                                 // sketch title
+  client.print("</ul>");
 }
-
-
 
 
 // ----------------------------------------------------------------
@@ -97,29 +100,31 @@ void webheader(WiFiClient &client, char style[] = " ") {
 
 void webfooter(WiFiClient &client) {
 
-     // get mac address
-       byte mac[6];
-       WiFi.macAddress(mac);
+   // get mac address
+     byte mac[6];
+     WiFi.macAddress(mac);
+   
+   client.print("<br>\n"); 
+   
+   /* Status display at bottom of screen */
+   client.print("<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n");
+   client.printf("<small> %s", colRed); 
+   client.printf("%s %s", stitle, sversion); 
+   client.printf(" | Memory: %dK", ESP.getFreeHeap() /1000); 
+   client.printf(" | Wifi: %ddBm", WiFi.RSSI()); 
+   // NTP server link status
+    int tstat = timeStatus();   // ntp status
+    if (tstat == timeSet) client.print(" | NTP OK");
+    else if (tstat == timeNeedsSync) client.print(" | NTP Sync failed");
+    else if (tstat == timeNotSet) client.print(" | NTP Failed");
+   // client.printf(" | Spiffs: %dK", ( SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000 ) );             // if using spiffs 
+   // client.printf(" | MAC: %2x%2x%2x%2x%2x%2x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);       // mac address
+   client.printf("%s </small>\n", colEnd);
+   client.print("</div>\n"); 
      
-     client.write("<br>\n"); 
-     
-     /* Status display at bottom of screen */
-     client.write("<div style='text-align: center;background-color:rgb(128, 64, 0)'>\n");
-     client.printf("<small> %s", colRed); 
-     client.printf("%s %s", stitle, sversion); 
-     client.printf(" | Memory: %dK", ESP.getFreeHeap() /1000); 
-     client.printf(" | Wifi: %ddBm", WiFi.RSSI()); 
-     // NTP server link status
-        if (NTPok == 1) client.write(" | NTP Link OK");
-        else client.write(" | NTP Link DOWN");
-     // client.printf(" | Spiffs: %dK", ( SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000 ) );             // if using spiffs 
-     // client.printf(" | MAC: %2x%2x%2x%2x%2x%2x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);       // mac address
-     client.printf("%s </small>\n", colEnd);
-     client.write("</div>\n"); 
-       
-   /* end of HTML */  
-     client.write("</body>\n");
-     client.write("</html>\n");
+  /* end of HTML */  
+   client.print("</body>\n");
+   client.print("</html>\n");
 
 }
 
@@ -136,7 +141,7 @@ void handleLogpage() {
 
   // log page request including clients IP address
       IPAddress cip = client.remoteIP();
-      log_system_message("Root page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));   
+      log_system_message("Log page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));   
       // To send to serial port use: Serial.println(cip.toString());
       
 
@@ -144,20 +149,20 @@ void handleLogpage() {
 
       webheader(client);                    // send html page header  
 
-      client.write("<P>\n");                // start of section
+      client.print("<P>\n");                // start of section
   
-      client.write("<br>SYSTEM LOG<br><br>\n");
+      client.print("<br>SYSTEM LOG<br><br>\n");
   
       // list all system messages
       for (int i=LogNumber; i != 0; i--){
-        client.write(system_message[i].c_str());
+        client.print(system_message[i].c_str());
         if (i == LogNumber) {
           client.printf("%s  {Most Recent Entry} %s", colRed, colEnd);          // build line of html
         }
-        client.write("<br>\n");    // new line
+        client.print("<br>\n");    // new line
       }
     
-      client.write("<br>");
+      client.print("<br>");
     
       // close html page
         webfooter(client);                          // send html page footer
@@ -218,16 +223,14 @@ void handleReboot(){
 //                                -wifi connection check
 // --------------------------------------------------------------------------------------
 
-
 void WIFIcheck() {
   
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED) {                     // if wifi is down
       if ( wifiok == 1) {
         log_system_message("Wifi connection lost");          // log system message if wifi was ok but now down
         wifiok = 0;                                          // flag problem with wifi
       }
     } else { 
-      // wifi is ok
       if ( wifiok == 0) {
         log_system_message("Wifi connection is back");       // log system message if wifi was down but now back
         wifiok = 1;                                          // flag wifi is now ok

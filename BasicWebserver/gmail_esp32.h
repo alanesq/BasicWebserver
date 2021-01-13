@@ -39,9 +39,9 @@
 
 //               s e t t i n g s 
 
-  const String emailReceiver = "<email to send to>";         // address to send emails
+  const String emailReceiver = "<email address to send emails to>";         // address to send emails
   
-  const String _mailUser = "<email to send from>";
+  const String _mailUser = "<email address to send emails from>";
   
   const String _mailPassword = "<email password>";
 

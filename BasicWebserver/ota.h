@@ -21,6 +21,7 @@
 #if defined ESP32
   #include <Update.h>
 #endif
+ 
 
 // forward declarations
   void otaSetup();
@@ -46,24 +47,24 @@ void otaSetup() {
         }, []() {
           HTTPUpload& upload = server.upload();
           if (upload.status == UPLOAD_FILE_START) {
-            Serial.setDebugOutput(true);
-            Serial.printf("Update: %s\n", upload.filename.c_str());
+            if (serialDebug) Serial.setDebugOutput(true);
+            if (serialDebug) Serial.printf("Update: %s\n", upload.filename.c_str());
             if (!Update.begin()) { //start with max available size
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_WRITE) {
             if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_END) {
             if (Update.end(true)) { //true to set the size to the current progress
-              Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+              if (serialDebug) Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
             } else {
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
-            Serial.setDebugOutput(false);
+            if (serialDebug) Serial.setDebugOutput(false);
           } else {
-            Serial.printf("Update Failed Unexpectedly (likely broken connection): status=%d\n", upload.status);
+            if (serialDebug) Serial.printf("Update Failed Unexpectedly (likely broken connection): status=%d\n", upload.status);
           }
         });
     #endif
@@ -79,24 +80,24 @@ void otaSetup() {
         }, []() {
           HTTPUpload& upload = server.upload();
           if (upload.status == UPLOAD_FILE_START) {
-            Serial.setDebugOutput(true);
+            if (serialDebug) Serial.setDebugOutput(true);
             WiFiUDP::stopAll();
-            Serial.printf("Update: %s\n", upload.filename.c_str());
+            if (serialDebug) Serial.printf("Update: %s\n", upload.filename.c_str());
             uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
             if (!Update.begin(maxSketchSpace)) { //start with max available size
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_WRITE) {
             if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_END) {
             if (Update.end(true)) { //true to set the size to the current progress
-              Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+              if (serialDebug) Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
             } else {
-              Update.printError(Serial);
+              if (serialDebug) Update.printError(Serial);
             }
-            Serial.setDebugOutput(false);
+            if (serialDebug) Serial.setDebugOutput(false);
           }
           yield();
         });
@@ -110,7 +111,7 @@ void handleOTA(){
 
   // log page request including clients IP address
       IPAddress cip = client.remoteIP();
-      log_system_message("OTA web page requested from: " + String(cip[0]) + "." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
+      //log_system_message("OTA web page requested from: " + String(cip[0]) + "." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
 
 
   // Send page html
