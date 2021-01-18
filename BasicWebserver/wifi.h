@@ -2,7 +2,7 @@
  *
  *      Wifi / NTP Connections using WifiManager - 13Jan21
  *      
- *      part of the BasicWebserver sketch
+ *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *             
  *      Set up wifi for either esp8266 or esp32 plus NTP (network time)
  *                    
@@ -23,9 +23,10 @@
       String AP_SSID = "ESPPortal";
       String AP_PASS = "12345678";    
 
-    // mDNS name
-      // const String mDNS_name = "esp32";
-      // const String mDNS_name = stitle;                                         // use sketch title
+
+//     mDNS name
+//       const String mDNS_name = "esp32";
+//       const String mDNS_name = stitle;                                         // use sketch title
       
 
 
@@ -40,6 +41,7 @@
   time_t getNTPTime();
   String requestWebPage(String, String, int, int);
   
+  
 bool wifiok = 0;                // flag if wifi connection is ok
 
 
@@ -47,8 +49,8 @@ bool wifiok = 0;                // flag if wifi connection is ok
 //                              -Startup
 // ----------------------------------------------------------------
   
-// wifi for esp8266/esp32
-    #if defined ESP32
+// wifi for esp8266 / esp32
+  #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
     #include <WiFiClient.h>
@@ -72,7 +74,7 @@ bool wifiok = 0;                // flag if wifi connection is ok
 
 
 // Time from NTP server
-//      from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
+//  from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
   #include <TimeLib.h>
   #include <WiFiUdp.h>                          // UDP library which is how we communicate with Time Server
   const uint16_t localPort = 8888;              // Just an open port we can use for the UDP packets coming back in
@@ -82,9 +84,8 @@ bool wifiok = 0;                // flag if wifi connection is ok
   WiFiUDP NTPUdp;                               // A UDP instance to let us send and receive packets over UDP
   const uint16_t timeZone = 0;                  // timezone (0=GMT)
   const String DoW[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-  // How often to resync the time (under normal and error conditions)
-    const uint16_t _resyncSeconds = 7200;       // 7200 = 2 hours
-    const uint16_t _resyncErrorSeconds = 60;    // 60 = 1 min
+  const uint16_t _resyncSeconds = 7200;         // How often to resync the time (under normal conditions) 7200 = 2 hours
+  const uint16_t _resyncErrorSeconds = 300;     // How often to resync the time (under error conditions) 300 = 5 minutes
 
 
 // ----------------------------------------------------------------
@@ -99,43 +100,43 @@ void startWifiManager() {
     ESP_wifiManager.setConfigPortalTimeout(120);
     ESP_wifiManager.setDebugOutput(true);   
 
-    // get stored wifi settings
-      String Router_SSID = ESP_wifiManager.WiFi_SSID();    
-      String Router_Pass = ESP_wifiManager.WiFi_Pass();
-      if (Router_SSID == "") if (serialDebug) Serial.println("There are no wifi settings stored");
+  // get stored wifi settings
+    String Router_SSID = ESP_wifiManager.WiFi_SSID();    
+    String Router_Pass = ESP_wifiManager.WiFi_Pass();
+    if (Router_SSID == "") if (serialDebug) Serial.println("There are no wifi settings stored");
 
-    // try connecting to wifi
-      if (serialDebug) Serial.println("Connecting to wifi using WifiManager");
-      WiFi.begin(Router_SSID.c_str(), Router_Pass.c_str());
+  // try connecting to wifi
+    if (serialDebug) Serial.println("Connecting to wifi using WifiManager");
+    WiFi.begin(Router_SSID.c_str(), Router_Pass.c_str());
 
-    // if unable to connect to wifi start config portal  
-      if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-        if (serialDebug) Serial.println("Unable to connect to WiFi - starting Wifimanager config portal");
-        if ( !ESP_wifiManager.startConfigPortal(AP_SSID.c_str(), AP_PASS.c_str()) ) {
-          if (serialDebug) Serial.println("Not connected to WiFi - rebooting");
-          delay(1000);
-          ESP.restart();  
-          delay(5000);           // restart will fail without this delay
-        }
-      }    
+  // if unable to connect to wifi start config portal  
+    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      if (serialDebug) Serial.println("Unable to connect to WiFi - starting Wifimanager config portal");
+      if ( !ESP_wifiManager.startConfigPortal(AP_SSID.c_str(), AP_PASS.c_str()) ) {
+        if (serialDebug) Serial.println("Not connected to WiFi - rebooting");
+        delay(1000);
+        ESP.restart();  
+        delay(5000);           // restart will fail without this delay
+      }
+    }    
 
-    // finished connecting to wifi (it should be connected at this point)
-      if (WiFi.status() == WL_CONNECTED) {
-        if (serialDebug) Serial.print("connected to wifi. Local IP: ");
-        if (serialDebug) Serial.println(WiFi.localIP());
-        wifiok = 1;  
-      } else {
-        if (serialDebug) Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
-      }  
+  // finished connecting to wifi (it should be connected at this point)
+    if (WiFi.status() == WL_CONNECTED) {
+      if (serialDebug) Serial.print("connected to wifi. Local IP: ");
+      if (serialDebug) Serial.println(WiFi.localIP());
+      wifiok = 1;  
+    } else {
+      if (serialDebug) Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+    }  
           
-//    // Set up mDNS responder:
-//      if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
+//  // Set up mDNS responder:
+//    if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
 
-    // start NTP
-      NTPUdp.begin(localPort); 
-      setSyncProvider(getNTPTime);              // the function that gets the time (in ms since 01/01/1900)?
-      setSyncInterval(_resyncErrorSeconds);     // How often to synchronise the time (in seconds) 
-           
+  // start NTP (Time)
+    NTPUdp.begin(localPort); 
+    setSyncProvider(getNTPTime);              // the function that gets the time from NTP
+    setSyncInterval(_resyncErrorSeconds);     // How often to re-synchronise the time (in seconds) 
+         
 }  // startwifimanager
 
 
@@ -158,8 +159,8 @@ String currentTime(){
    ttime += String(day(t)) + "/" + String(month(t)) + "/" + String(year(t)) + " ";    // date
 
    return ttime;
-
-}
+   
+}  // currentTime
 
 
 
@@ -215,7 +216,7 @@ boolean IsBST()
       return true;  
     }
 
-}
+}  // IsBST
 
 
 //-----------------------------------------------------------------------------
@@ -250,7 +251,7 @@ void sendNTPpacket(const char* address) {
   // All done, the underlying buffer is now updated
   NTPUdp.endPacket();
   
-}
+}  // sendNTPpacket
 
 
 //-----------------------------------------------------------------------------
@@ -312,7 +313,8 @@ time_t getNTPTime() {
     setSyncInterval(_resyncErrorSeconds);       // try more frequently until a response is received
 
     return 0;
-}
+    
+}  // getNTPTime
 
 
 // ----------------------------------------------------------------
@@ -387,7 +389,8 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
       }
     
   return received;        // return the full reply text
-}
+  
+}  // requestWebPage
 
 
 // --------------------------- E N D -----------------------------

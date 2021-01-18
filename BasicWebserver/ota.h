@@ -1,14 +1,18 @@
 /**************************************************************************************************
  *  
- *      Over The Air updates (OTA) - 01Oct20
+ *      Over The Air updates (OTA) - 13Jan21
  * 
- *      part of the BasicWebserver sketch
+ *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *                                   
- *      In Arduino IDE Select "ESP32 dev module" not ESP32-cam, PSRAM enabled
+ *                                   
+ *      The /ota page is only available after a password has been supplied in the format:   http://x.x.x.x/?pwd=12345678                             
+ *                                   
+ *      If using an esp32cam module In Arduino IDE Select "ESP32 dev module" not "ESP32-cam" with PSRAM enabled
  *                     
  * 
  **************************************************************************************************
 
+ 
     To enable/disable OTA see setting at top of main sketch (#define ENABLE_OTA 1)
 
     Activate OTA with   http://<esp ip address>?pwd=12345678
@@ -23,7 +27,7 @@
 #endif
  
 
-// forward declarations
+// forward declarations (i.e. details of all functions in this file)
   void otaSetup();
   void handleOTA();
 
@@ -105,6 +109,9 @@ void otaSetup() {
 
 }
 
+
+// -----------------------------------------------------------------------
+
 void handleOTA(){
 
   WiFiClient client = server.client();          // open link with client
@@ -136,5 +143,6 @@ void handleOTA(){
     client.stop();
     
 }
+
 
 // ---------------------------------------------- end ----------------------------------------------

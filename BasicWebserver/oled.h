@@ -1,10 +1,11 @@
 /**************************************************************************************************
  *  
- *      OLED display Menu System - 08Dec20
+ *      OLED display Menu System - 13Jan21 
  * 
- *      using a i2c version SSD1306 display and rotary encoder
+ *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  * 
- *      part of the BasicWebserver sketch
+ * 
+ *      using an i2c version of the SSD1306 0.96" display and a rotary encoder
  *                                   
  * 
  **************************************************************************************************
@@ -25,7 +26,6 @@ choose from a list or display a message.
  
 
  for more oled info see: https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
-
 
  
  **************************************************************************************************/
@@ -75,24 +75,10 @@ choose from a list or display a message.
   #endif
   
 
-// *************************************************************************************************
-  
+// -------------------------------------------------------------------------------------------------
 
-  #include <Adafruit_GFX.h>
-  #include <Adafruit_SSD1306.h>
-  
-  // rotary encoder
-    struct REncoder {
-      volatile int encoder0Pos = 0;           // current value selected with rotary encoder (updated in interrupt routine)
-      volatile bool encoderPrevA = 0;         // previous reading from rotary encoder
-      volatile bool encoderPrevB = 0;      
-    };
-    REncoder encoderA;                        // create the rotary encode variables from the structure (encoderA.encoder0Pos etc.)
-    bool reButtonState = 0;                   // current debounced state of the button
-    uint32_t reButtonTimer = millis();        // time button state last changed
-    int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes
-   
-  // forward declarations
+
+  // forward declarations (i.e. details of all functions in this file)
     void setMenu(byte, String);
     int enterValue(String, int, int, int, int);
     void menuItemSelection();
@@ -107,7 +93,21 @@ choose from a list or display a message.
     #else    // ESP8266
       void ICACHE_RAM_ATTR doEncoder();
     #endif    
-    
+
+
+  #include <Adafruit_GFX.h>
+  #include <Adafruit_SSD1306.h>
+  
+  // rotary encoder
+    struct REncoder {
+      volatile int encoder0Pos = 0;           // current value selected with rotary encoder (updated in interrupt routine)
+      volatile bool encoderPrevA = 0;         // previous reading from rotary encoder
+      volatile bool encoderPrevB = 0;      
+    };
+    REncoder encoderA;                        // create the rotary encode variables from the structure (encoderA.encoder0Pos etc.)
+    bool reButtonState = 0;                   // current debounced state of the button
+    uint32_t reButtonTimer = millis();        // time button state last changed
+    int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes 
   
   // oled SSD1306 display connected to I2C (SDA, SCL pins)
     #define OLED_ADDR 0x3C                    // OLED i2c address
@@ -115,7 +115,6 @@ choose from a list or display a message.
     #define SCREEN_HEIGHT 64                  // OLED display height, in pixels
     #define OLED_RESET -1                     // Reset pin # (or -1 if sharing Arduino reset pin)
     Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
 
 
 /* -------------------------------------------------------------------------------------------------
@@ -186,14 +185,12 @@ display.drawRect(10, 34, 108, 28, WHITE);
 // -------------------------------------------------------------------------------------------------
 
 
-
 // menu action procedures
 //   check if menu item has been selected with:  if (menuTitle == "<menu name>" && menuItemClicked==<item number 1-4>)
 
 void menuItemActions() {
     
   if (menuItemClicked == 100) return;                                 // if no menu item has been clicked exit function
-
 
 
   //  --------------------- Main Menu Actions ------------------
@@ -243,6 +240,7 @@ void menuItemActions() {
     
   //  --------------------- Menu 2 Actions ---------------------
 
+  
     // show time/date
     if (menuTitle == "Menu 2" && menuItemClicked==0) {
       menuItemClicked=100;                                            
@@ -269,11 +267,11 @@ void menuItemActions() {
 
 }
 
+
 // -------------------------------------------------------------------------------------------------
 //                                        customise the menus above
 // -------------------------------------------------------------------------------------------------
 
-    
 // called from setup 
 
 void oledSetup() {
@@ -411,6 +409,7 @@ void staticMenu() {
 
 //  --------------------------------------
 
+
 // display time/date on oled
 
 void displayTimeOLED() {
@@ -527,6 +526,7 @@ void menuItemSelection() {
 
 //  -------------------------------------------------
 
+
 // enter a value using the rotary encoder
 //   pass Value title, starting value, step size, low limit , high limit
 //   returns the chosen value
@@ -576,6 +576,7 @@ int enterValue(String title, int start, int stepSize, int low, int high) {
 }
 
 //  --------------------------------------
+        
         
 // choose from list using rotary encoder
 //  pass the number of items in list (max 8), list title, list of options in a string array
@@ -649,7 +650,6 @@ int chooseFromList(byte noOfElements, String listTitle, String list[]) {
 
 
 // ----------------------------------------------
-
 
 
 // rotary encoder interrupt routine to update position counter when turned

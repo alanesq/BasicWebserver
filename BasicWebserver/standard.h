@@ -1,14 +1,14 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 29Nov20
+ *      Some standard procedures - 13Jan21
  *      
- *      part of the BasicWebserver sketch
+ *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *      
  *             
  **************************************************************************************************/
 
 
-// forward declarations
+// forward declarations (i.e. details of all functions in this file)
   void log_system_message(String);
   void webheader();
   void webfooter();
@@ -16,8 +16,7 @@
   void handleNotFound();
   void handleReboot();
   void WIFIcheck();
-
-
+  
 
 // ----------------------------------------------------------------
 //                              -Startup
@@ -30,8 +29,6 @@
   const char colEnd[] = "</font>";                          // end coloured text
 
 String system_message[LogNumber + 1];                       // system log message store
-
-
 
 
 // ----------------------------------------------------------------
@@ -51,7 +48,6 @@ void log_system_message(String smes) {
   // also send message to serial port
     if (serialDebug) Serial.println("Log:" + system_message[LogNumber]);
 }
-
 
 
 // ----------------------------------------------------------------
@@ -97,7 +93,6 @@ void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
 // ----------------------------------------------------------------
 // HTML at the end of each web page
 
-
 void webfooter(WiFiClient &client) {
 
    // get mac address
@@ -129,11 +124,9 @@ void webfooter(WiFiClient &client) {
 }
 
 
-
 // ----------------------------------------------------------------
 //   -log web page requested    i.e. http://x.x.x.x/log
 // ----------------------------------------------------------------
-
 
 void handleLogpage() {
 
@@ -170,7 +163,6 @@ void handleLogpage() {
         client.stop();
 
 }
-
 
 
 // ----------------------------------------------------------------
@@ -225,12 +217,13 @@ void handleReboot(){
 
 void WIFIcheck() {
   
-    if (WiFi.status() != WL_CONNECTED) {                     // if wifi is down
+    if (WiFi.status() != WL_CONNECTED) {
       if ( wifiok == 1) {
         log_system_message("Wifi connection lost");          // log system message if wifi was ok but now down
         wifiok = 0;                                          // flag problem with wifi
       }
     } else { 
+      // wifi is ok
       if ( wifiok == 0) {
         log_system_message("Wifi connection is back");       // log system message if wifi was down but now back
         wifiok = 1;                                          // flag wifi is now ok

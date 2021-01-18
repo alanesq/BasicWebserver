@@ -1,37 +1,36 @@
 /*******************************************************************************************************************
  *
- *      Basic web server For ESP8266/ESP32 using Arduino IDE 
+ *                              Basic web server For ESP8266/ESP32 using Arduino IDE 
+ * 
+ *                                   https://github.com/alanesq/BasicWebserver
+ * 
  *             
- *      Included files: gmail.h, standard.h, ota.h, oled.h and wifi.h (gmailxxx.h is optional)
+ *                           Included files: email.h, standard.h, ota.h, oled.h & wifi.h 
  *             
  *             
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
  *      I have found to provide a basic web page displaying updating information, control buttons etc..
- *      It also has the ability to retrieve a web page as text (requestpage).
- *      note: the more advanced method would be using web sockets - see https://www.youtube.com/watch?v=ROeT-gyYZfw
+ *      It also has the ability to retrieve a web page as text (see: requestWebPage() in wifi.h).
+ *      For a more advanced method of updating info on a web page see: 
+ *                              https://github.com/alanesq/BasicWebserver/blob/master/misc/VeryBasicWebserver.ino
  *                                                     
  *                                                      
- *      Note:  To add ESP8266/32 ability to the Arduino IDE enter the below line in to FILE/PREFERENCES/BOARDS MANAGER
- *             http://arduino.esp8266.com/stable/package_esp8266com_index.json, https://dl.espressif.com/dl/package_esp32_index.json
- *             You can then add them in the Boards Manager.
- *             ESP8266 addon package used = v2.5.2     (I find problems if using a newer version)
+ *      Note:  To add ESP8266/32 ability to the Arduino IDE enter the below two lines in to FILE/PREFERENCES/BOARDS MANAGER
+ *                 http://arduino.esp8266.com/stable/package_esp8266com_index.json
+ *                 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+ *             You can then add them in TOOLS/BOARD/BOARDS MANAGER (search for esp8266 or ESP32)
  *          
  *      First time the ESP starts it will create an access point "ESPPortal" which you need to connect to in order to enter your wifi details.  
- *             default password = "12345678"   (change these in wifi.h)
+ *             default password = "12345678"   (change this in wifi.h)
  *             see: https://randomnerdtutorials.com/wifimanager-with-esp8266-autoconnect-custom-parameter-and-manage-your-ssid-and-password
- *
  * 
- *      Note: to send/receive data via wifi see UDP: https://www.arduino.cc/en/Tutorial/UDPSendReceiveString
- * 
- *      Lots of great info. - https://randomnerdtutorials.com  or  https://techtutorialsx.com
- *                            https://www.baldengineer.com/
+ *      Lots of great info. - https://randomnerdtutorials.com  or  https://techtutorialsx.com or https://www.baldengineer.com/
  *      Handy way to try out your C++ code:   https://coliru.stacked-crooked.com/
  * 
- *      
  *      Much of the sketch is the code from other people's work which I have combined together, I believe I have links 
  *      to all the sources but let me know if I have missed anyone.
  *
- *                                                                               Created by: www.alanesq.eu5.net
+ *                                                                                      Created by: www.alanesq.eu5.net
  *                                                                               
  *        BasicWebserver is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the 
  *        implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -50,11 +49,11 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "13Jan21";                      // version of this sketch
+  const char* sversion = "18Jan21";                      // version of this sketch
 
-  #define ENABLE_OLED 1                                  // Enable OLED display  
+  #define ENABLE_OLED 0                                  // Enable OLED display  
 
-  #define ENABLE_EMAIL 0                                 // Enable E-mail  
+  #define ENABLE_EMAIL 1                                 // Enable E-mail  
   
   #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
@@ -109,12 +108,12 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
   #include "oled.h"                     // OLED display - i2c version SSD1306
 #endif
 
-#if defined(ESP8266) && ENABLE_EMAIL
-    #include "gmail_esp8266.h"
-#elif defined(ESP32)  && ENABLE_EMAIL
-    #include "gmail_esp32.h"
+#if ENABLE_EMAIL
+    #include "email.h"
+    // forward declaration
+      void smtpCallback(SMTP_Status status);    // the procedure called when status info is available
+      bool sendEmail(char*, char* , char*);
 #endif
-
 
   
 // ---------------------------------------------------------------
@@ -201,15 +200,15 @@ void setup(void) {
 
 void loop(void){
 
-  #if defined(ESP8266)
-    yield();                        // allow esp8266 to carry out wifi tasks (may restart randomly without this command)
-  #endif
-  
-  server.handleClient();            // service any web page requests (may not be needed for esp32?)
+    #if defined(ESP8266)
+        yield();                        // allow esp8266 to carry out wifi tasks (may restart randomly without this command)
+    #endif
+    
+    server.handleClient();            // service any web page requests (may not be needed for esp32?)
 
-  #if ENABLE_OLED
-    oledLoop();                     // handle oled menu system
-  #endif
+    #if ENABLE_OLED
+        oledLoop();                     // handle oled menu system
+    #endif
 
 
 
@@ -219,13 +218,13 @@ void loop(void){
 
 
 
-  // every 1.5 seconds change the LED status, check Wifi is connected and update time
-  //          explanation of timing here: https://www.baldengineer.com/arduino-millis-plus-addition-does-not-add-up.html
+    // every 1.5 seconds change the LED status, check Wifi is connected and update time
+    //          explanation of timing here: https://www.baldengineer.com/arduino-millis-plus-addition-does-not-add-up.html
     if ((unsigned long)(millis() - LEDtimer) >= ledBlinkRate ) {   
-      digitalWrite(led, !digitalRead(led));        // invert led status
-      WIFIcheck();                                 // check if wifi connection is ok
-      LEDtimer = millis();                         // reset timer
-      time_t t=now();                              // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
+        digitalWrite(led, !digitalRead(led));        // invert led status
+        WIFIcheck();                                 // check if wifi connection is ok
+        LEDtimer = millis();                         // reset timer
+        time_t t=now();                              // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
     }
 
 } 
@@ -281,8 +280,6 @@ void handleRoot() {
         // demo button was pressed 
           log_system_message("demo button was pressed");     
       }
-
-
 
 
   // build the HTML code 
@@ -387,15 +384,22 @@ void handleTest(){
 
 
 
+  // send a test email
+      _message[0]=0; _subject[0]=0;          // clear any existing text
+      strcat(_subject,"test message");
+      strcat(_message,"this is a test email from the esp");
+      sendEmail(_emailReceiver, _subject, _message);  
+  
 
 
+//  // demo of how to request a web page
+//      String webpage = requestWebPage("192.168.1.166","/log",80,800,"<html>");
+//      if (serialDebug) Serial.println(webpage);
+    
+     
 
-
-//      // demo of how to request a web page
-//        String webpage = requestWebPage("192.168.1.166","/log",80,800,"<html>");
-//        if (serialDebug) Serial.println(webpage);
-      
-       
+  
+  
   // -----------------------------------------------------------------------------
 
 
