@@ -5,7 +5,7 @@
  *                                   https://github.com/alanesq/BasicWebserver
  * 
  *             
- *                           Included files: email.h, standard.h, ota.h, oled.h & wifi.h 
+ *                           Included files: email.h, standard.h, ota.h, oled.h, gsm.h & wifi.h 
  *             
  *             
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
@@ -49,11 +49,15 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "18Jan21";                      // version of this sketch
+  const char* sversion = "22Jan21";                      // version of this sketch
+
+  const bool serialDebug = 1;                            // provide extended debug info on serial port
 
   #define ENABLE_OLED 0                                  // Enable OLED display  
 
-  #define ENABLE_EMAIL 1                                 // Enable E-mail  
+  #define ENABLE_GSM 0                                   // Enable GSM board support
+
+  #define ENABLE_EMAIL 0                                 // Enable E-mail  
   
   #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
@@ -70,14 +74,11 @@
   const byte led = 2;                                    // indicator LED pin - D0/D4 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32
 
   const uint16_t ledBlinkRate = 1500;                    // Speed to blink the status LED (milliseconds)
-  
-  // const onboardButton = D3;                              // onboard button (nodemcu boards)
 
   const boolean ledON = LOW;                             // Status LED control 
   const boolean ledOFF = HIGH;
 
   const int serialSpeed = 115200;                        // Serial data speed to use
-  const bool serialDebug = 1;                            // provide extended debug info on serial port
   
 
 // ---------------------------------------------------------------
@@ -93,6 +94,8 @@
 
 
 bool OTAEnabled = 0;                    // flag if OTA has been enabled (via supply of password)
+bool GSMconnected = 0;                  // flag if the gsm module is connected ok
+bool wifiok = 0;                        // flag if wifi connection is ok
 
 uint32_t LEDtimer = millis();           // used for flashing the LED
   
@@ -104,12 +107,21 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
   #include "ota.h"                      // Over The Air updates (OTA)
 #endif
 
+#if ENABLE_GSM
+  #include "gsm.h"                      // GSM board
+#endif
+
 #if ENABLE_OLED
   #include "oled.h"                     // OLED display - i2c version SSD1306
 #endif
 
 #if ENABLE_EMAIL
     #include "email.h"
+    // stores for email messages
+      const int maxMessageLength = 600;                         // maximum length of email message
+      const int maxSubjectLength = 150;                         // maximum length of email subject
+      char _message[maxMessageLength];
+      char _subject[maxSubjectLength];
     // forward declaration
       void smtpCallback(SMTP_Status status);    // the procedure called when status info is available
       bool sendEmail(char*, char* , char*);
@@ -122,10 +134,10 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 //
 // setup section (runs once at startup)
 
-void setup(void) {
+void setup() {
     
   if (serialDebug) {
-    Serial.begin(serialSpeed);                                   // serial port
+    Serial.begin(serialSpeed); while (!Serial); delay(200);       // start serial comms                                   // serial port
     delay(200);
 
     Serial.println("\n\n\n");                                    // line feeds
@@ -146,6 +158,10 @@ void setup(void) {
 
   #if ENABLE_OLED
     oledSetup();         // initialise the oled display
+  #endif
+
+  #if ENABLE_GSM
+    setupGSM();          // initialise GSM board
   #endif
  
   // if (serialDebug) Serial.setDebugOutput(true);                                // enable extra diagnostic info  
@@ -201,13 +217,17 @@ void setup(void) {
 void loop(void){
 
     #if defined(ESP8266)
-        yield();                        // allow esp8266 to carry out wifi tasks (may restart randomly without this command)
+        yield();                      // allow esp8266 to carry out wifi tasks (may restart randomly without this command)
     #endif
     
     server.handleClient();            // service any web page requests (may not be needed for esp32?)
 
     #if ENABLE_OLED
-        oledLoop();                     // handle oled menu system
+        oledLoop();                   // handle oled menu system
+    #endif
+
+    #if ENABLE_GSM
+        GSMloop();                    // handle GSM board
     #endif
 
 
@@ -384,11 +404,16 @@ void handleTest(){
 
 
 
-  // send a test email
-      _message[0]=0; _subject[0]=0;          // clear any existing text
-      strcat(_subject,"test message");
-      strcat(_message,"this is a test email from the esp");
-      sendEmail(_emailReceiver, _subject, _message);  
+//// demo of how to send a sms message via GSM board
+//  sendSMS(phoneNumber, "this is a test message from the gsm demo sketch");
+
+
+
+//  // demo of how to send a email
+//      _message[0]=0; _subject[0]=0;          // clear any existing text
+//      strcat(_subject,"test message");
+//      strcat(_message,"this is a test email from the esp");
+//      sendEmail(_emailReceiver, _subject, _message);  
   
 
 
@@ -397,8 +422,6 @@ void handleTest(){
 //      if (serialDebug) Serial.println(webpage);
     
      
-
-  
   
   // -----------------------------------------------------------------------------
 
