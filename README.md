@@ -9,7 +9,7 @@ It is the easiest way I have found to serve web pages with control buttons, upda
 BTW - This sketch will automatically adjust to running on either a ESP8266 or a ESP32
 For more examples of serving simple web pages see: https://github.com/alanesq/BasicWebserver/blob/master/misc/VeryBasicWebserver.ino
 
-It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system and OTA updating.
+It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system, GSM board and OTA updating.
 
 <table><tr>
   <td><img src="/Images/Screenshot1.png" /></td>
