@@ -5,6 +5,8 @@
 //
 //       shows use of AJAX to show updating info on the web page
 //
+//       https://github.com/alanesq/BasicWebserver/blob/master/misc/VeryBasicWebserver.ino
+//
 //
 // ----------------------------------------------------------------
 
