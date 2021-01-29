@@ -118,6 +118,10 @@ void loop() {
   //// flash onboard LED
   //digitalWrite(LEDpin, !digitalRead(LEDpin));    // invert onboard LED status 
   //delay(200);                                    // wait 200 milliseconds
+
+  #if defined(ESP8266)
+      yield();                      // allow esp8266 to carry out wifi tasks (may restart randomly without this)
+  #endif
   
 }  // loop
 
