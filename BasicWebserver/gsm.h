@@ -1,6 +1,6 @@
 /************************************************************************************************** 
  *
- *                             GSM module - 22jan21
+ *                             GSM module - 01Feb21
  * 
  *
  *  See:  https://lastminuteengineers.com/a6-gsm-gprs-module-arduino-tutorial/
@@ -10,7 +10,7 @@
  *
  *  Note: 
  *        takes a few seconds for GSM module to connect to network before it will send any replys
- *        needs good 5v supply
+ *        needs good power supply (my sim800 seems to need 5v?)
  *        RST low to turn off
  *       
  *        If the GSM module keeps turning off it is probably the power supply can't supply enough current
@@ -20,7 +20,7 @@
  *        A standard received sms will look like this:
  *                                                      +CIEV: "MESSAGE",1
  *                                                     
- *                                                      +CMT: "+441111111111",,"2021/01/20,10:46:09+00"
+ *                                                      +CMT: "+447812343449",,"2021/01/20,10:46:09+00"
  *                                                      This is a test text message   
  *       
  *        A message from GiffGaff will look like this (i.e. no date or number info):
@@ -33,8 +33,10 @@
 
 
  Notes: 
-
-    Only tested with a AI Thinker A6 board so far
+ 
+    Mainly designed for use with the Sim800 GSM board
+        Note: it requires an odd voltage and allegedly up to 2 amps - I have found running it from 5 volts
+              going through a diode to drop the voltage along with a good sized smoothing capacitor seems to work ok.
 
     You can issue AT commands to the GSM module via Serial Monitor 
 
@@ -42,14 +44,75 @@
         e.g. respond to incoming sms message or incoming data requested via requestWebPageGSM()
 
     For a Sim to use in your GSM module I recommend GiffGaff, they are good value and do not seem to get disconnected if you do not top
-        them up very often.  If you top it up every 3 months (£10 min.) then text messages between Giffgaff phones are not charged for.
+        them up very often.  
+        If you top it up every 3 months (£10 min.) then text messages between Giffgaff phones are not charged for.
 
+    Some of the GSM boards require an odd voltage (between 3.4 and 4.4volts), The easiest way to deal with this
+        would be to use 5volts and connect it to the GSM board via a diode as the diode will give a 0.6volt drop.
+        I have not seen this suggested anywhere, I don't know if there is some reason why?
+        
+        
+        
+ 
+Common Sim800 AT commands:
+
+    SIM800 routine	
+        AT	        Check interface
+        AT+CPIN?        Check if SIM is unlocked
+    Initialize phone	
+        AT+CREG?	Check network status
+        AT+CFUN=0       Minimal phone functionality (Sim Reset)
+        AT+CFUN=1       Full functionality
+        AT+CSQ	        Check signal
+    GPRS Setup	    
+        AT+CGATT?	Check if connected to GPRS
+        AT+CGATT=0	Detach from GPRS network
+        AT+CGATT=1	Attach to GPRS network
+        AT+CIPSHUT	Reset IP session
+        AT+CIPSTATUS	Check if IP stack is initialized
+        AT+CIPMUX=0	Setting up single connection mode
+    Ping Tests	
+        AT+CSTT=”internet”      Ping request
+        AT+CIICR	Bring up wireless connection
+        AT+CIFSR	Get local IP address
+        AT+CIPSTART=”TCP”,”url”	    Start connection
+        AT+CIPSEND	Request initiation for data sending
+    Bearer Configure	
+        AT+SAPBR=3,1,”CONTYPE”,”GPRS”	Configure bearer profile 1
+        AT+SAPBR=3,1,”APN”,”internet”	Set “internet” as APN. Varies per different network
+        AT+SAPBR=1,1	To open a GPRS context
+        AT+SAPBR=2,1	To query the GPRS context
+        AT+SAPBR=0,1	To close GPRS context
+    Get Location	
+        AT+CLBS=?	Base station test command
+        AT+CLBSCFG=0,1	Get customer ID
+        AT+CLBSCFG=0,2	Get Times have use positioning command
+        AT+CLBS=1,1	Get current longitude, latitude and precision
+        AT+CLBS=3,1	Get access times
+        AT+CLBS=4,1	Get current longitude, latitude, precision and date time
+    Network Time Synchronize	
+        AT+CNTPCID=1	Set NTP use bear profile 1
+        AT+CNTP=”time.upd.edu.ph”,32	Set NTP service URL and local time zone
+        AT+CNTP	Start sync network time
+        AT+CCLK?	Query local time
+    HTTP Request	
+        AT+HTTPINIT	Initialize HTTP service
+        AT+HTTPPARA=”CID”,1	Set parameters for HTTP session
+        AT+HTTPPARA=”REDIR”,1	Set to enable redirect
+        AT+HTTPPARA=”URL”,”http://m.smart.com.ph”	Set the URL
+        AT+HTTPACTION=0	Start the HTTP session
+        AT+HTTPREAD	Read the data of the HTTP server
+        AT+HTTPTERM	Terminate HTTP service
+        AT+HTTPSTATUS?	Check HTTP status
+ 
+ */
+        
 */
 
  //            --------------------------- settings -------------------------------
 
 
-const String phoneNumber = "+441111111111";        // standard phone number to send sms messages to 
+const String phoneNumber = "+44xxxxxxxxxx";        // phone number to send sms messages to 
 
 const String GSM_APN = "giffgaff.com";             // APN for mobile data
 
@@ -92,15 +155,15 @@ uint32_t checkGSMdataTimer = millis();      // timer for periodic check for inco
 // ----------------------------------------------------------------
 //                     -act on any incoming data
 // ----------------------------------------------------------------
-// periodic check for any incoming data from gms module
-
+// periodic check for any incoming data from gms module - called from GSMloop()
+  
 void dataReceivedFromGSM() {
 
     String reply = contactGSMmodule("");  // check gsm module for any incoming data on serial
     if (reply == "") return;   // no incoming data from GSM module
 
         
-    // check for incoming SMS message 
+    // check for an incoming SMS message 
       if (reply.indexOf("+CIEV: \"MESSAGE\"") >= 0) {       // search for:     +CIEV: "MESSAGE"
         int pos = reply.indexOf("+CMT: ");                  // search for:     +CMT:
             if (pos >= 0) {
@@ -116,9 +179,10 @@ void dataReceivedFromGSM() {
 
 //    // send a test sms message if "send sms" in a received sms message
 //      if (reply.indexOf("send sms") >= 0) sendSMS(phoneNumber, "this is a test message from the gsm demo sketch");
-//
-//
+
+
 //    // request a web page via GSM data if "get web" received in a sms message
+//    //   see comments below requestWebPageGSM() for example of a reply
 //      if (reply.indexOf("get web") >= 0) requestWebPageGSM("http://alanesq.eu5.net/temp/q.txt");  
             
 }
@@ -133,7 +197,7 @@ void setupGSM() {
 
   // configure reset pin
     if (GSMresetPin != -1) {
-        digitalWrite(GSMresetPin, !GSMresetPinActive);     // set to not resetting
+        digitalWrite(GSMresetPin, !GSMresetPinActive);     // set to not active
         pinMode(GSMresetPin, OUTPUT);
     }  
 
@@ -170,7 +234,7 @@ void GSMloop() {
           }
       }    
 
-    // periodic check for any incoming data on serial or from gms module
+    // periodic check for any incoming data on serial or from gsm module
       if ((unsigned long)(millis() - checkGSMdataTimer) >= checkGSMdataPeriod ) {
         checkGSMdataTimer = millis();
         dataReceivedFromGSM();
@@ -246,11 +310,17 @@ bool checkGSMmodule(int maxTries) {
 
 void sendSMS(String SMSnumber, String SMSmessage) {
 
+  int sdel = 1000;            // delay between commands
+    
+  if (serialDebug) Serial.println("Sending SMS to '" + SMSnumber + "', message = '" + SMSmessage + "'");
+
   if (serialDebug) Serial.println("Sending SMS to '" + SMSnumber + "', message = '" + SMSmessage + "'");
 
   contactGSMmodule("AT+CMGF=1");                         // put in to sms mode
+  delay(sdel);
   
   contactGSMmodule("AT+CMGS=\"" + SMSnumber + "\"");     // e.g. "AT+CMGS=\"+ZZxxxxxxxxxx\"" - change ZZ with country code and xxxxxxxxxxx with phone number to sms
+  delay(sdel);
   
   contactGSMmodule(SMSmessage);                          // the message to send
   
@@ -270,25 +340,57 @@ Response when text was sent ok  (the 4 changes):
 // ----------------------------------------------------------------
 //                   Request web page via GSM
 // ----------------------------------------------------------------
+// see: https://predictabledesigns.com/the-sim800-cellular-module-and-arduino-a-powerful-iot-combo/
 
 void requestWebPageGSM(String URL) {
 
-  if (serialDebug) Serial.println("Requesting web page via GSM '" + URL + "', message = '");
+    int sdel = 1000;            // delay between commands
 
-  contactGSMmodule("AT+CSTT=\"" + GSM_APN + "\",\"\",\"\"");        // set APN
+    if (serialDebug) Serial.println("Requesting web page via GSM '" + URL + "', message = '");
     
-  contactGSMmodule("AT+CIICR");                                     // connect
+    // Sim800:
+    
+        // contactGSMmodule("AT+CSQ");                                      // Check for signal quality
+        
+        contactGSMmodule("AT+CGATT=1");                                     // Attach to a GPRS network
+        delay(sdel);
+        
+        contactGSMmodule("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");              // Configure bearer profile 1
+        delay(sdel);
+        
+        contactGSMmodule("AT+SAPBR=3,1,\"APN\",GSM_APN");                   // APN for phone network
+        delay(sdel);
+        
+        contactGSMmodule("AT+SAPBR=1,1");                                   // To open a GPRS context  (slight delay then OK)
+        delay(sdel);
+        
+        contactGSMmodule("AT+HTTPINIT");                                    // Init HTTP service
+        delay(sdel);
+        
+        contactGSMmodule("AT+HTTPPARA=\"CID\",1");                          // Set parameters for HTTP session
+        delay(sdel);
+        
+        contactGSMmodule("AT+HTTPPARA=\"REDIR\",1");                        // Auto redirect  
+        delay(sdel);
+        
+        contactGSMmodule("AT+HTTPPARA=\"URL\",\"" + URL + "\"");            // input web site URL
+        delay(sdel);
+        
+        contactGSMmodule("AT+HTTPACTION=0");                                // Get the web page -  sfter delay responds "+HTTPACTION: 0,200,9"
+        delay(sdel * 2);
+        
+        contactGSMmodule("AT+HTTPREAD");                                    // Read the data of the HTTP server - reply
+    
 
-  delay(5000);
-  
-  contactGSMmodule("AT+CIFSR");                                     // display IP address
 
-  contactGSMmodule("AT+HTTPGET=\"" + URL + "\"");                   // request URL
+  // A6
+  //    contactGSMmodule("AT+HTTPGET=\"" + URL + "\"");                     // request URL 
+        
   
 }
 /*
 
- reply example:
+ reply example - A6:
                   +HTTPRECV:HTTP/1.1 200 OK
                   Date: Thu, 21 Jan 2021 16:49:46 GMT
                   Server: Apache
@@ -301,6 +403,16 @@ void requestWebPageGSM(String URL) {
                   Content-Type: text/plain
                   
                   it works
+                  
+                  
+ reply example - Sim800:
+                  AT+HTTPREAD
+                  
+                  +HTTPREAD: 9
+                  it works
+                  
+                  OK
+                  
 */
 
 
