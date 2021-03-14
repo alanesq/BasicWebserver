@@ -3,9 +3,7 @@
  *      Over The Air updates (OTA) - 14Mar21
  * 
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
- *                                   
- *                                   
- *      The /ota page is only available after a password has been supplied in the format:   http://x.x.x.x/?pwd=12345678                             
+ *                                                                                              
  *                                   
  *      If using an esp32cam module In Arduino IDE Select "ESP32 dev module" not "ESP32-cam" with PSRAM enabled
  *                     
@@ -13,9 +11,8 @@
  **************************************************************************************************
 
  
-    To enable/disable OTA see setting at top of main sketch (#define ENABLE_OTA 1)
+    To enable/disable OTA updates see setting at top of main sketch (#define ENABLE_OTA 1)
 
-    Activate OTA with   http://<esp ip address>?pwd=12345678
     Then access with    http://<esp ip address>/ota
 
  
@@ -33,16 +30,14 @@
 
 
 // ----------------------------------------------------------------
-//                         -OTA setup section
+//     -enable OTA
 // ----------------------------------------------------------------
-
-// Called from 'setup'
+//
+//   Enable OTA updates, called when correct password has been entered
 
 void otaSetup() {
 
     OTAEnabled = 1;          // flag that OTA has been enabled
-
-    // server.on("/ota", handleOTA);
 
     // esp32 version (using webserver.h)
     #if defined ESP32
@@ -50,6 +45,7 @@ void otaSetup() {
           server.sendHeader("Connection", "close");
           server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
           ESP.restart();
+          delay(2000);
         }, []() {
           HTTPUpload& upload = server.upload();
           if (upload.status == UPLOAD_FILE_START) {
@@ -112,7 +108,11 @@ void otaSetup() {
 }
 
 
-// -----------------------------------------------------------------------
+// ----------------------------------------------------------------
+//     -OTA web page requested     i.e. http://x.x.x.x/ota
+// ----------------------------------------------------------------
+//
+//   Request OTA password or implement OTA update
 
 void handleOTA(){
 
@@ -142,18 +142,13 @@ void handleOTA(){
             <table width='20%' bgcolor='A09F9F' align='center'>
                 <tr>
                     <td colspan=2>
-                        <center><font size=4><b>Enter OTA password</b></font></center>
-                        <br>
+                        <center><font size=4><b>Enter OTA password</b></font></center><br>
                     </td>
-                    <br>
-                </tr>
-                <tr>
+                        <br>
+                </tr><tr>
                     <td>Password:</td>
-                    <td><input type='Password' size=25 name='pwd'><br></td>
-                    <br>
-                    <br>
-                </tr>
-                <tr>
+                    <td><input type='Password' size=25 name='pwd'><br></td><br><br>
+                </tr><tr>
                     <td><input type='submit' onclick='check(this.form)' value='Login'></td>
                 </tr>
             </table>
@@ -165,7 +160,6 @@ void handleOTA(){
             }
         </script>
       )=====");
-
       
       webfooter(client);                          // add the standard web page footer
 
@@ -175,7 +169,7 @@ void handleOTA(){
 
   if (OTAEnabled == 1) {
     
-    // Send page when OTA is enabled
+    // OTA is enabled so implement it
   
       webheader(client);                            // add the standard html header
     
