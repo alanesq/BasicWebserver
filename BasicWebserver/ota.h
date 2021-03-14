@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      Over The Air updates (OTA) - 13Jan21
+ *      Over The Air updates (OTA) - 14Mar21
  * 
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *                                   
@@ -40,7 +40,9 @@
 
 void otaSetup() {
 
-    server.on("/ota", handleOTA);
+    OTAEnabled = 1;          // flag that OTA has been enabled
+
+    // server.on("/ota", handleOTA);
 
     // esp32 version (using webserver.h)
     #if defined ESP32
@@ -120,24 +122,79 @@ void handleOTA(){
       IPAddress cip = client.remoteIP();
       //log_system_message("OTA web page requested from: " + String(cip[0]) + "." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
 
+  // check if valid password supplied
+    if (server.hasArg("pwd")) {
+      if (server.arg("pwd") == OTAPassword) otaSetup();    // Enable over The Air updates (OTA)
+    }
 
-  // Send page html
 
-    webheader(client);                            // add the standard html header
-  
-    client.write("<br><H1>Update firmware</H1><br>\n");
-    client.printf("Current version =  %s, %s \n\n", stitle, sversion);
+
+  // -----------------------------------------
+
+  if (OTAEnabled == 0) {
     
-    client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
-    client.write("<input type='file' style='width: 300px' name='update'>\n");
-    client.write("<br><br><input type='submit' value='Update'></form><br>\n");
+    // OTA is not enabled so request password to enable it
   
-    client.write("<br><br>Device will reboot when upload complete");
-    client.printf("%s <br>To disable OTA restart device<br> %s \n", colRed, colEnd);
+      webheader(client);                            // add the standard html header
+  
+      client.print (R"=====(
+         <form name='loginForm'>
+            <table width='20%' bgcolor='A09F9F' align='center'>
+                <tr>
+                    <td colspan=2>
+                        <center><font size=4><b>Enter OTA password</b></font></center>
+                        <br>
+                    </td>
+                    <br>
+                </tr>
+                <tr>
+                    <td>Password:</td>
+                    <td><input type='Password' size=25 name='pwd'><br></td>
+                    <br>
+                    <br>
+                </tr>
+                <tr>
+                    <td><input type='submit' onclick='check(this.form)' value='Login'></td>
+                </tr>
+            </table>
+        </form>
+        <script>
+            function check(form)
+            {
+              window.open('/ota?pwd=' + form.pwd.value , '_self')
+            }
+        </script>
+      )=====");
 
-    webfooter(client);                          // add the standard web page footer
+      
+      webfooter(client);                          // add the standard web page footer
+
+  }
+
+  // -----------------------------------------
+
+  if (OTAEnabled == 1) {
     
-                          
+    // Send page when OTA is enabled
+  
+      webheader(client);                            // add the standard html header
+    
+      client.write("<br><H1>Update firmware</H1><br>\n");
+      client.printf("Current version =  %s, %s \n\n", stitle, sversion);
+      
+      client.write("<form method='POST' action='/update' enctype='multipart/form-data'>\n");
+      client.write("<input type='file' style='width: 300px' name='update'>\n");
+      client.write("<br><br><input type='submit' value='Update'></form><br>\n");
+    
+      client.write("<br><br>Device will reboot when upload complete");
+      client.printf("%s <br>To disable OTA restart device<br> %s \n", colRed, colEnd);
+  
+      webfooter(client);                          // add the standard web page footer
+  }
+    
+  // -----------------------------------------
+
+                            
   // close html page
     delay(3);
     client.stop();
