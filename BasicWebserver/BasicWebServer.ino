@@ -198,6 +198,7 @@ void setup() {
     server.on("/log", handleLogpage);        // system log
     server.on("/test", handleTest);          // testing page
     server.on("/reboot", handleReboot);      // reboot the esp
+    server.on("/ota", handleOTA);
     server.onNotFound(handleNotFound);       // invalid page requested
   
   // start web server
@@ -267,18 +268,6 @@ void handleRoot() {
 
 
   // action any button presses etc.
-
-  #if ENABLE_OTA
-  // enable OTA if password supplied in url parameters   (?pass=xxx)
-    if (server.hasArg("pwd")) {
-        String Tvalue = server.arg("pwd");   // read value
-          if (Tvalue == OTAPassword) {
-            otaSetup();    // Over The Air updates (OTA)
-            log_system_message("OTA enabled");
-            OTAEnabled = 1;
-          }
-    }
-  #endif
 
     // if demo radio button "RADIO1" was selected 
       if (server.hasArg("RADIO1")) {
