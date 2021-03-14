@@ -37,5 +37,4 @@ ESP8266 addon package = v2.5.2     (I find problems if useing a newer version)
 
 It now suports OTA updates (this can be disabled in the settings if preferred)
       Note - As at least some basic form of security you first need to enter a password to enable ota
-             Activate OTA with   http://x.x.x.x?pwd=12345678
              Then access with    http://x.x.x.x/ota
