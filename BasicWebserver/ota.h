@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      Over The Air updates (OTA) - 14Mar21
+ *      Over The Air updates (OTA) - 15Mar21
  * 
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *                                                                                              
@@ -43,7 +43,7 @@ void otaSetup() {
     #if defined ESP32
         server.on("/update", HTTP_POST, []() {
           server.sendHeader("Connection", "close");
-          server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+          server.send(200, "text/plain", (Update.hasError()) ? "Update Failed!, rebooting..." : "Update complete, rebooting...");
           delay(2000);
           ESP.restart();
           delay(2000);
@@ -76,7 +76,7 @@ void otaSetup() {
     #if defined ESP8266
         server.on("/update", HTTP_POST, []() {
           server.sendHeader("Connection", "close");
-          server.send(200, "text/plain", (Update.hasError()) ? "Update Failed!, rebooting" : "Update complete, device is rebooting...");
+          server.send(200, "text/plain", (Update.hasError()) ? "Update Failed!, rebooting..." : "Update complete, rebooting...");
           delay(2000);
           ESP.restart();
           delay(2000);
