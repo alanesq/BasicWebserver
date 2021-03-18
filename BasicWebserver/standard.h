@@ -58,9 +58,15 @@ void log_system_message(String smes) {
 
 
 void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
+  
+  // send standard html header
+    client.write("HTTP/1.1 200 OK\r\n");
+    client.write("Content-Type: text/html\r\n");
+    client.write("Connection: close\r\n");
+    client.write("\r\n");
+    client.write("<!DOCTYPE HTML>"\n);  
 
   client.print (R"=====(
-    <!DOCTYPE html>
     <html lang='en'>
     <head>
       <meta name='viewport' content='width=device-width, initial-scale=1.0'>
