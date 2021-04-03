@@ -32,7 +32,7 @@
 // misc variables
   String lastClient = "n/a";                  // IP address of most recent client connected
   int system_message_pointer = 0;             // pointer for current system message position
-  String system_message[LogNumber];           // system log message store  
+  String system_message[LogNumber + 1];       // system log message store  
   
 
 // ----------------------------------------------------------------
