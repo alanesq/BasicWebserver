@@ -29,7 +29,7 @@ but I think the simplest).
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
 
-The ries used by the sketch are in "libraries used.zip" (copy them in to your libraries folder).
+The librarys used by the sketch are in "libraries used.zip" (copy them in to your libraries folder).
 Note: I have recently updated this sketch to use newer versions of libraries so if you have an older version you will
       need to update your installed libraries.
 ESP8266 addon package = v2.5.2     (I find problems if useing a newer version)
@@ -38,3 +38,7 @@ ESP8266 addon package = v2.5.2     (I find problems if useing a newer version)
 It now suports OTA updates (this can be disabled in the settings if preferred)
       Note - As at least some basic form of security you first need to enter a password to enable ota
              Then access with    http://x.x.x.x/ota
+             
+If you have several projects there is a HTML page here which can be used to give a menu of them all
+https://github.com/alanesq/CameraWifiMotion/blob/master/misc/menu-of-projects.htm
+
