@@ -348,7 +348,7 @@ void handleData(){
     client.write("Content-Type: text/html\r\n");
     client.write("Connection: close\r\n");
     client.write("\r\n");
-    client.write("<!DOCTYPE HTML>"\n);
+    client.write("<!DOCTYPE HTML>\n");
   
   client.write("<html lang='en'><head><title>data</title></head><body>\n"); 
 

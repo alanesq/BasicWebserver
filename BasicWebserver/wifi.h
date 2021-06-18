@@ -42,7 +42,7 @@
   String requestWebPage(String, String, int, int);
   
   
-bool wifiok = 0;                // flag if wifi connection is ok
+// bool wifiok = 0;                // flag if wifi connection is ok
 
 
 // ----------------------------------------------------------------
