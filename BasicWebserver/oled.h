@@ -1,21 +1,16 @@
 /**************************************************************************************************
  *  
- *      OLED display Menu System - 13Jan21 
+ *      OLED display Menu System - i2c version SSD1306 - 18Jun21
  * 
- *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
- * 
- * 
- *      using an i2c version of the SSD1306 0.96" display and a rotary encoder
+ *      part of the BasicWebserver sketch
  *                                   
  * 
  **************************************************************************************************
       
- oled pins: esp8266: sda=d2, scl=d1    
-            esp32: sda=21, scl=22
+ oled pins: sda=d2, scl=d1    
  oled address = 3C 
- rotary encoder pins: 
-            esp8266: d5, d6, d7 (button) - Note: you can use d3 instead of d7 to free up d7 for general use if required
-            esp32: 13, 14, 15
+ rotary encoder pins: d5, d6, d7 (button)
+ note: button can go on d3 instead of d7 to free up a spare io pin
  
  The sketch displays a menu on the oled and when an item is selected it sets a 
  flag and waits until the event is acted upon.  Max menu items on a 128x64 oled 
@@ -24,61 +19,22 @@
 See the section "customise the menus below" for how to create custom menus inclusing selecting a value, 
 choose from a list or display a message.
  
+ Notes:   text size 1 = 21 x 8 characters
+          text size 2 = 10 x 4
 
  for more oled info see: https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
+
 
  
  **************************************************************************************************/
 
 
- //            --------------------------- settings -------------------------------
- 
- 
-  const bool oledDebug = 1;                   // debug enable on serial for oled.h
-
-  int itemTrigger = 1;                        // no of counts on rotary encoder per step (1 or 2 usually depending on encoder)
-
-  const int topLine = 18;                     // y position of second bank of menu display (specially used on two colour displays)
-
-  int OLEDDisplayTimeout = 10;                // oled menu display timeout (seconds)
-
-  // oled menu
-    const byte menuMax = 5;                 // max number of menu items
-    const byte lineSpace1 = 9;              // line spacing for font size 1
-    const byte lineSpace2 = 17;             // line spacing for font size 2
-    String menuOption[menuMax];             // options displayed in menu
-    byte menuCount = 0;                     // which menu item is curently highlighted 
-    String menuTitle = "";                  // current menu ID number (blank = none)
-    byte menuItemClicked = 100;             // menu item has been clicked flag (100=none)
-    uint32_t lastREActivity = 0;            // time last activity was seen on rotary encoder
-
-  #if defined(ESP8266)
-    // esp8266
-    const String boardType="ESP8266";
-    #define I2C_SDA D2                      // i2c pins
-    #define I2C_SCL D1
-    #define encoder0PinA  D5
-    #define encoder0PinB  D6
-    #define encoder0Press D7                // button 
-    
-  #elif defined(ESP32)
-    // esp32
-    const String boardType="ESP32";
-    #define I2C_SDA 21                      // i2c pins
-    #define I2C_SCL 22
-    #define encoder0PinA  13
-    #define encoder0PinB  14
-    #define encoder0Press 15                // button 
-    
-  #else
-    #error Unsupported board - must be esp32 or esp8266
-  #endif
-  
-
-// -------------------------------------------------------------------------------------------------
-
-
-  // forward declarations (i.e. details of all functions in this file)
+// forward declarations 
+    void menuItemActions();
+    void Main_Menu();
+    void menu2();
+    bool confirmActionRequired();  
+    void ICACHE_RAM_ATTR doEncoder();
     void setMenu(byte, String);
     int enterValue(String, int, int, int, int);
     void menuItemSelection();
@@ -86,35 +42,88 @@ choose from a list or display a message.
     void staticMenu();
     int chooseFromList(byte, String, String[]);
     void reWaitKeypress(int);
+    void storeSettings();
+    void exitMenu(); 
     void displayTimeOLED();
-    bool confirmActionRequired();
-    #if defined ESP32
-      void IRAM_ATTR doEncoder();
-    #else    // ESP8266
-      void ICACHE_RAM_ATTR doEncoder();
-    #endif    
-
 
   #include <Adafruit_GFX.h>
   #include <Adafruit_SSD1306.h>
   
-  // rotary encoder
-    struct REncoder {
-      volatile int encoder0Pos = 0;           // current value selected with rotary encoder (updated in interrupt routine)
-      volatile bool encoderPrevA = 0;         // previous reading from rotary encoder
-      volatile bool encoderPrevB = 0;      
-    };
-    REncoder encoderA;                        // create the rotary encode variables from the structure (encoderA.encoder0Pos etc.)
-    bool reButtonState = 0;                   // current debounced state of the button
-    uint32_t reButtonTimer = millis();        // time button state last changed
-    int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes 
+  // settings
+    #define encoder0PinA  D5                  // gpio pins
+    #define encoder0PinB  D6
+    #define encoder0Press D7                  
+    int OLEDDisplayTimeout = 10;              // inactivity time on rotary encoder after which display goes blank (seconds)
+    int itemTrigger = 2;                      // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
+
+  // rotary encoder  
+    volatile int encoder0Pos = 0;             // current value selected with rotary encoder (updated in interrupt routine)
+    volatile bool encoderPrevA;               // used to debounced rotary encoder 
+    volatile bool encoderPrevB;               // used to debounced rotary encoder 
+    bool reButtonState = 1;                   // current debounced state of the button
+    uint32_t reButtonTimer = 0;               // time button state last changed
+    int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes
+      
+  // oled menu
+    // int itemTrigger = 2;                      // rotary encoder - counts per tick
+    const int topLine = 18;                   // y position of second bank of menu display 
+    const byte menuMax = 5;                   // max number of menu items
+    const byte lineSpace1 = 9;                // line spacing textsize 1
+    const byte lineSpace2 = 17;               // line spacing textsize 2
+    String menuOption[menuMax];               // options displayed in menu
+    byte menuCount = 0;                       // which menu item is curently highlighted 
+    String menuTitle = "";                    // current menu ID number (blank = none)
+    byte menuItemClicked = 100;               // menu item has been clicked flag (100=none)
+    uint32_t lastREActivity = 0;              // time last activity was seen on rotary encoder
   
   // oled SSD1306 display connected to I2C (SDA, SCL pins)
     #define OLED_ADDR 0x3C                    // OLED i2c address
     #define SCREEN_WIDTH 128                  // OLED display width, in pixels
     #define SCREEN_HEIGHT 64                  // OLED display height, in pixels
     #define OLED_RESET -1                     // Reset pin # (or -1 if sharing Arduino reset pin)
+    // #define OLED_RESET LED_BUILTIN           // I have seen this is required for esp8266?
     Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
+// -------------------------------------------------------------------------------------------------
+
+
+// called from setup 
+
+void oledSetup() {
+
+  // configure gpio pins
+    pinMode(encoder0Press, INPUT_PULLUP);
+    pinMode(encoder0PinA, INPUT);
+    pinMode(encoder0PinB, INPUT);
+
+  // initialise the oled display
+    if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
+      Serial.println(("\nError initialising the oled display"));
+    }
+
+  // Interrupt for reading the rotary encoder position
+    encoder0Pos = 0;   
+    attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE); 
+
+  Main_Menu();    // start the main menu displaying - see menuItemActions() to edit the menus
+}
+
+
+// -------------------------------------------------------------------------------------------------
+
+
+// called from loop - service the menus
+
+void oledLoop() {
+    // if a oled menu is active service it 
+    if (menuTitle != "") {                                  // if a menu is active
+      menuCheck();                                          // check if encoder selection button is pressed
+      menuItemSelection();                                  // check for change in menu item highlighted
+      staticMenu();                                         // display the menu 
+      menuItemActions();                                    // act if a menu item has been clicked
+    } 
+}
 
 
 /* -------------------------------------------------------------------------------------------------
@@ -182,11 +191,11 @@ display.drawRect(10, 34, 108, 28, WHITE);
   }
 
    
-// -------------------------------------------------------------------------------------------------
+    
+//  -------------------------------------------------------------------------------------------
+//  ------------------------------------- menu procedures -------------------------------------
+//  -------------------------------------------------------------------------------------------
 
-
-// menu action procedures
-//   check if menu item has been selected with:  if (menuTitle == "<menu name>" && menuItemClicked==<item number 1-4>)
 
 void menuItemActions() {
     
@@ -211,7 +220,7 @@ void menuItemActions() {
 
     // enter a value
     if (menuTitle == "Main Menu" && menuItemClicked==1) {
-      menuItemClicked=100;    
+      menuItemClicked=100;  
       int tres=enterValue("Testval", 15, 1, 0, 30);                      // enter a value (title, start value, step size, low limit, high limit)
       log_system_message("Menu: Value set = " + String(tres));
     }
@@ -268,71 +277,10 @@ void menuItemActions() {
 }
 
 
-// -------------------------------------------------------------------------------------------------
-//                                        customise the menus above
-// -------------------------------------------------------------------------------------------------
-
-// called from setup 
-
-void oledSetup() {
-
-  // configure gpio pins
-    pinMode(encoder0Press, INPUT_PULLUP);
-    pinMode(encoder0PinA, INPUT);
-    pinMode(encoder0PinB, INPUT);
-
-  // initialise the oled display
-    Wire.begin(I2C_SDA,I2C_SCL);
-    if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-      if (oledDebug) Serial.println(("\nError initialising the oled display"));
-    }
-
-  // Display splash screen on OLED
-    display.clearDisplay();
-    display.setTextColor(WHITE);
-    display.setCursor(0, 0);
-    display.setTextSize(1);
-    display.print(stitle);
-    display.setCursor(0, lineSpace1 * 2);
-    display.print(sversion);
-    display.setCursor(0, lineSpace1 * 4);
-    display.print(boardType);
-    display.setCursor(0, lineSpace1 * 5);
-    //display.print(freeMemory());
-    display.display();
-    delay(1000);
-
-  // Interrupt for reading the rotary encoder position
-    attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE); 
-
-  Main_Menu();    // start the menu displaying - see menuItemActions() to alter the menus
-
-}
+//  --------------------------------------
 
 
-// -------------------------------------------------------------------------------------------------
-
-// called from loop - service the menus
-
-void oledLoop() {
-
-    // if a oled menu is active service it 
-    if (menuTitle != "") {                                  // if a menu is active
-      menuCheck();                                          // check if encoder selection button is pressed
-      menuItemSelection();                                  // check for change in menu item highlighted
-      staticMenu();                                         // display the menu 
-      menuItemActions();                                    // act if a menu item has been clicked
-    } 
-
-}
-
-    
-//  -------------------------------------------------------------------------------------------
-//  ------------------------------------- menu procedures -------------------------------------
-//  -------------------------------------------------------------------------------------------
-
-
-// confirm that a requested action is not a mistake with a long press of the button
+// confirm that a requested action is not a mistake
 //   returns 1 if confirmed
 
 bool confirmActionRequired() {
@@ -347,7 +295,7 @@ bool confirmActionRequired() {
   display.print("CONFIRM!");
   display.display();
   
-  delay(2000);
+  delay(1500);
   display.clearDisplay();  
   display.display();
 
@@ -359,25 +307,8 @@ bool confirmActionRequired() {
 //  --------------------------------------
 
 
-// set menu item
-// pass: new menu items number, name         (blank iname clears all entries)
-
-void setMenu(byte inum, String iname) {
-  if (inum >= menuMax) return;    // invalid number
-  if (iname == "") {              // clear all menu items
-    for (int i; i < menuMax; i++)  menuOption[i] = "";
-    menuCount = 0;                // move highlight to top menu item
-  } else {
-    menuOption[inum] = iname;
-    menuItemClicked = 100;        // set item selected flag as none
-  }
-}
-
-
-//  --------------------------------------
-
-
 // display menu on oled
+
 void staticMenu() {
   display.clearDisplay(); 
   // title
@@ -392,18 +323,280 @@ void staticMenu() {
     while (i < menuMax && menuOption[i] != "") {                           // if menu item is not blank display it
       if (i == menuItemClicked) display.setTextColor(BLACK,WHITE);         // if this item has been clicked
       else display.setTextColor(WHITE,BLACK);
-      display.setCursor(10, 12 + (i*lineSpace1));
+      display.setCursor(10, topLine + (i*lineSpace1));
       display.print(menuOption[i]);
       i++;
     }
 
   // highlighted item if none yet clicked
     if (menuItemClicked == 100) {
-      display.setCursor(2, 12 + (menuCount * lineSpace1));
+      display.setCursor(2, topLine + (menuCount * lineSpace1));
       display.print(">");
     }
-  
+ 
   display.display();          // update display
+}
+
+
+//  --------------------------------------
+
+
+// rotary encoder button
+//    returns 1 if the button status has changed since last time
+
+bool menuCheck() {
+
+  if (digitalRead(encoder0Press) == reButtonState) return 0;    // no change
+  delay(20);
+  if (digitalRead(encoder0Press) == reButtonState) return 0;    // debounce
+  if (millis() - reButtonTimer  < reButtonMinTime) return 0;    // if too soon since last change
+
+  // button status has changed
+  reButtonState = !reButtonState;   
+  reButtonTimer = millis();                                     // update timer
+  noInterrupts();                                               // reset rotary encoder position counter back to zero
+    encoder0Pos = 0;       
+  interrupts();
+
+  // oled menu action on button press 
+  if (reButtonState==LOW) {                                     // if button is now pressed      
+    lastREActivity = millis();                                  // log time last activity seen (don't count button release as activity)
+    if (menuItemClicked != 100 || menuTitle == "") return 1;    // menu item already selected or there is no live menu
+    if (serialDebug) Serial.println("menu '" + menuTitle + "' item " + String(menuCount) + " selected");
+    menuItemClicked = menuCount;                                // set item selected flag
+  }
+
+  return 1;
+}
+
+//  --------------------------------------
+
+
+// wait for key press or turn on rotary encoder
+//    pass timeout in ms
+void reWaitKeypress(int timeout) {          
+        uint32_t tTimer = millis();   // log time
+        // wait for button to be released
+          while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < timeout) ) {        // wait for button release
+            delay(20);
+          }
+        // clear rotary encoder position counter
+          noInterrupts();
+            encoder0Pos = 0;       
+          interrupts();
+        // wait for button to be pressed or encoder to be turned
+          while ( (digitalRead(encoder0Press) == HIGH) && (encoder0Pos < itemTrigger && encoder0Pos > -itemTrigger) && (millis() - tTimer < timeout) ) {
+            delay(10);
+          }
+}
+
+
+//  --------------------------------------
+
+
+// handle menu item highlighted via rotary encoder
+//      note:       int instep = !(encoder0Pos%itemTrigger);           // to check the encoder counter is not out of step
+
+void menuItemSelection() {
+    if (encoder0Pos >= itemTrigger) {
+      noInterrupts();
+        encoder0Pos -= itemTrigger;
+      interrupts();
+      lastREActivity = millis();                            // log time last activity seen
+      if (menuCount+1 < menuMax) menuCount++;               // if not past max menu items move
+      if (menuOption[menuCount] == "") menuCount--;         // if menu item is blank move back
+    }
+    else if (encoder0Pos <= -itemTrigger) {
+      noInterrupts();
+        encoder0Pos += itemTrigger;
+      interrupts();
+      lastREActivity = millis();                            // log time last activity seen
+      if (menuCount > 0) menuCount--;
+    }
+}   
+
+
+//  ---------------------------------------
+
+
+// enter a value using the rotary encoder
+//   pass Value title, starting value, step size, low limit , high limit
+//   returns the chosen value
+
+int enterValue(String title, int start, int stepSize, int low, int high) {
+  uint32_t tTimer = millis();                          // log time of start of function
+  int storeStart = start;   
+  // display title
+    display.clearDisplay();  
+    if (title.length() > 8) display.setTextSize(1);  // if title is longer than 8 chars make text smaller
+    else display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print(title);
+    display.display();                                  // update display
+  int tvalue = start;
+  while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) delay(5);    // wait for button release
+  tTimer = millis();
+  while ( (digitalRead(encoder0Press) == HIGH) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) {   // while button is not pressed and still within time limit
+    if (encoder0Pos >= itemTrigger) {                    // encoder0Pos is updated via the interrupt procedure
+      tvalue -= stepSize;
+      noInterrupts();                                    // stop interrupt changing the value whilst it is changed here
+        encoder0Pos -= itemTrigger;
+      interrupts();
+      tTimer = millis(); 
+    } 
+    else if (encoder0Pos <= -itemTrigger) {
+      tvalue += stepSize;
+      noInterrupts();
+        encoder0Pos += itemTrigger;
+      interrupts();
+      tTimer = millis();
+    }  
+    // value limits
+      if (tvalue > high) tvalue=high;              
+      if (tvalue < low) tvalue=low;
+    display.setTextSize(3);
+    const int textPos = 27;                             // height of number on display
+    display.fillRect(0, textPos, SCREEN_WIDTH, SCREEN_HEIGHT - textPos, BLACK);   // clear bottom half of display (128x64)
+    display.setCursor(0, textPos);
+    display.print(tvalue);
+    // bar graph at bottom of display
+      int tmag=map(tvalue, low, high, 0 ,SCREEN_WIDTH);
+      display.fillRect(0, SCREEN_HEIGHT - 10, tmag, 10, WHITE);  
+    display.display();                                  // update display
+    yield();                                            // service any web page requests
+  }
+  
+  // if it timed out set value back to what it was
+    if (millis() - tTimer >= (OLEDDisplayTimeout * 1000)) tvalue=storeStart;  
+   
+  return tvalue;
+}
+
+
+//  --------------------------------------
+
+        
+// choose from list using rotary encoder
+//  pass the number of items in list (max 8), list title, list of options in a string array
+
+int chooseFromList(byte noOfElements, String listTitle, String list[]) {
+
+  const byte noList = 10;                                // max number of items to list
+  uint32_t tTimer = millis();                            // log time of start of function
+  int highlightedItem = 0;                               // which item in list is highlighted
+  int xpos, ypos;
+  
+  // display title
+    display.clearDisplay();  
+    display.setTextSize(1);
+    display.setTextColor(WHITE,BLACK);
+    display.setCursor(10, 0);
+    display.print(listTitle);
+    display.drawLine(0, lineSpace1, display.width(), lineSpace1, WHITE);
+
+  // scroll through list
+    while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) delay(5);    // wait for button release
+    tTimer = millis();
+    while ( (digitalRead(encoder0Press) == HIGH) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) {   // while button is not pressed and still within time limit
+      if (encoder0Pos >= itemTrigger) {                    // encoder0Pos is updated via the interrupt procedure
+        noInterrupts();
+          encoder0Pos = 0;
+        interrupts();
+        highlightedItem++;
+        tTimer = millis(); 
+      }
+      if (encoder0Pos <= -itemTrigger) {
+        noInterrupts();
+          encoder0Pos = 0;
+        interrupts();
+        highlightedItem--;
+        tTimer = millis();
+      }  
+      // value limits
+        if (highlightedItem > noOfElements - 1) highlightedItem = noOfElements - 1;        
+        if (highlightedItem < 0) highlightedItem = 0;
+      // display the list
+        for (int i=0; i < noOfElements; i++) {
+            if (i < (noList/2)) {
+              xpos = 0; 
+              ypos = (lineSpace1 * i+1) + topLine;
+            } else {
+              xpos = display.width() / 2;
+              ypos = lineSpace1 * (i-(noList/2)) + topLine;
+            }
+            display.setCursor(xpos, ypos);
+            if (i == highlightedItem) display.setTextColor(BLACK,WHITE);
+            else display.setTextColor(WHITE,BLACK);
+            display.print(list[i]);
+        }
+      display.display();                                    // update display
+      yield();                                              // service any web page requests
+    }
+  
+  // if it timed out set selection to cancel (i.e. item 0)
+    if (millis() - tTimer >= (OLEDDisplayTimeout * 1000)) highlightedItem=0;      
+
+//  // wait for button to be released (up to 1 second)
+//    tTimer = millis();                         // log time
+//    while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < 1000) ) {
+//      yield();        // service any web page requests
+//      delay(20);
+//    }
+
+    return highlightedItem;
+}
+
+
+//  --------------------------------------
+
+
+// close the menus and return to sleep mode
+
+void exitMenu() {    
+    reButtonState = digitalRead(encoder0Press);     // reset current button status 
+    lastREActivity = 0;                             // clear time of last rotary encoder usage
+    noInterrupts();
+      delay(50);
+      encoder0Pos = 0;                              // clear rotary encoder position change counter
+    interrupts();
+    menuTitle = "";
+    display.clearDisplay();                           // display off
+    display.display();
+}
+
+
+//  --------------------------------------
+
+
+// rotary encoder interrupt routine to update position counter when turned
+//     interrupt info: https://www.gammon.com.au/forum/bbshowpost.php?id=11488
+
+void ICACHE_RAM_ATTR doEncoder() {
+     
+  bool pinA = digitalRead(encoder0PinA);
+  bool pinB = digitalRead(encoder0PinB);
+
+  if ( (encoderPrevA == pinA && encoderPrevB == pinB) ) return;  // no change since last time (i.e. reject bounce)
+
+  // same direction (alternating between 0,1 and 1,0 in one direction or 1,1 and 0,0 in the other direction)
+         if (encoderPrevA == 1 && encoderPrevB == 0 && pinA == 0 && pinB == 1) encoder0Pos -= 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 1 && pinA == 1 && pinB == 0) encoder0Pos -= 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 0 && pinA == 1 && pinB == 1) encoder0Pos += 1;
+    else if (encoderPrevA == 1 && encoderPrevB == 1 && pinA == 0 && pinB == 0) encoder0Pos += 1;
+    
+  // change of direction
+    else if (encoderPrevA == 1 && encoderPrevB == 0 && pinA == 0 && pinB == 0) encoder0Pos += 1;   
+    else if (encoderPrevA == 0 && encoderPrevB == 1 && pinA == 1 && pinB == 1) encoder0Pos += 1;
+    else if (encoderPrevA == 0 && encoderPrevB == 0 && pinA == 1 && pinB == 0) encoder0Pos -= 1;
+    else if (encoderPrevA == 1 && encoderPrevB == 1 && pinA == 0 && pinB == 1) encoder0Pos -= 1;
+
+    else if (serialDebug) Serial.println("Error: invalid rotary encoder pin state - prev=" + String(encoderPrevA) + "," 
+                                          + String(encoderPrevB) + " new=" + String(pinA) + "," + String(pinB));
+    
+  // update previous readings
+    encoderPrevA = pinA;
+    encoderPrevB = pinB;
 }
 
 
@@ -447,243 +640,21 @@ void displayTimeOLED() {
     display.display();
 }
 
-
 //  --------------------------------------
 
 
-// rotary encoder button
-//    returns 1 if the button status has changed since last time
+// set menu item
+// pass: new menu items number, name         (blank iname clears all entries)
 
-bool menuCheck() {
-
-  if (digitalRead(encoder0Press) == reButtonState) return 0;    // no change
-  delay(40);
-  if (digitalRead(encoder0Press) == reButtonState) return 0;    // debounce
-  if (millis() - reButtonTimer  < reButtonMinTime) return 0;    // if too soon since last change
-
-  // button status has changed
-  reButtonState = !reButtonState;   
-  reButtonTimer = millis();                                     // update timer
-
-  // oled menu action on button press 
-  if (reButtonState==LOW) {                                     // if button is now pressed      
-    lastREActivity = millis();                                  // log time last activity seen (don't count button release as activity)
-    if (menuItemClicked != 100 || menuTitle == "") return 1;    // menu item already selected or there is no live menu
-    if (serialDebug) Serial.println("menu '" + menuTitle + "' item " + String(menuCount) + " selected");
-    menuItemClicked = menuCount;                                // set item selected flag
+void setMenu(byte inum, String iname) {
+  if (inum >= menuMax) return;    // invalid number
+  if (iname == "") {              // clear all menu items
+    for (int i; i < menuMax; i++)  menuOption[i] = "";
+    menuCount = 0;                // move highlight to top menu item
+  } else {
+    menuOption[inum] = iname;
+    menuItemClicked = 100;        // set item selected flag as none
   }
-
-  return 1;
-}
-
-
-//  --------------------------------------
-
-
-// wait for key press or turn on rotary encoder
-//    pass timeout in ms
-void reWaitKeypress(int timeout) {          
-        uint32_t tTimer = millis();   // log time
-        // wait for button to be released
-          while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < timeout) ) {        // wait for button release
-            yield();                  // service any web page requests
-            delay(20);
-          }
-        // clear rotary encoder position counter
-          noInterrupts();
-            encoderA.encoder0Pos = 0;       
-          interrupts();
-        // wait for button to be pressed or encoder to be turned
-          while ( (digitalRead(encoder0Press) == HIGH) && (encoderA.encoder0Pos == 0) && (millis() - tTimer < timeout) ) {
-            yield();                  // service any web page requests
-            delay(20);
-          }
-}
-
-
-//  --------------------------------------
-
-// handle menu item selection
-
-void menuItemSelection() {
-    if (encoderA.encoder0Pos >= itemTrigger) {
-      noInterrupts();
-        encoderA.encoder0Pos -= itemTrigger;
-      interrupts();
-      lastREActivity = millis();                            // log time last activity seen
-      if (menuCount+1 < menuMax) menuCount++;               // if not past max menu items move
-      if (menuOption[menuCount] == "") menuCount--;         // if menu item is blank move back
-    }
-    else if (encoderA.encoder0Pos <= -itemTrigger) {
-      noInterrupts();
-        encoderA.encoder0Pos += itemTrigger;
-      interrupts();
-      lastREActivity = millis();                            // log time last activity seen
-      if (menuCount > 0) menuCount--;
-    }
-}    
-
-
-//  -------------------------------------------------
-
-
-// enter a value using the rotary encoder
-//   pass Value title, starting value, step size, low limit , high limit
-//   returns the chosen value
-int enterValue(String title, int start, int stepSize, int low, int high) {
-  uint32_t tTimer = millis();                          // log time of start of function
-  // display title
-    display.clearDisplay();  
-    if (title.length() > 8) display.setTextSize(1);  // if title is longer than 8 chars make text smaller
-    else display.setTextSize(2);
-    display.setTextColor(WHITE);
-    display.setCursor(0, 0);
-    display.print(title);
-    display.display();                                  // update display
-  int tvalue = start;
-  while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) delay(5);    // wait for button release
-  tTimer = millis();
-  while ( (digitalRead(encoder0Press) == HIGH) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) {   // while button is not pressed and still within time limit
-    if (encoderA.encoder0Pos >= itemTrigger) {                    // encoderA.encoder0Pos is updated via the interrupt procedure
-      tvalue -= stepSize;
-      noInterrupts();                                   // stop interrupt changing the value whilst it is changed here
-        encoderA.encoder0Pos -= itemTrigger;
-      interrupts();
-      tTimer = millis(); 
-    } 
-    else if (encoderA.encoder0Pos <= -itemTrigger) {
-      tvalue += stepSize;
-      noInterrupts();
-        encoderA.encoder0Pos += itemTrigger;
-      interrupts();
-      tTimer = millis();
-    }  
-    // value limits
-      if (tvalue > high) tvalue=high;              
-      if (tvalue < low) tvalue=low;
-    display.setTextSize(3);
-    const int textPos = 27;                             // height of number on display
-    display.fillRect(0, textPos, SCREEN_WIDTH, SCREEN_HEIGHT - textPos, BLACK);   // clear bottom half of display (128x64)
-    display.setCursor(0, textPos);
-    display.print(tvalue);
-    // bar graph at bottom of display
-      int tmag=map(tvalue, low, high, 0 ,SCREEN_WIDTH);
-      display.fillRect(0, SCREEN_HEIGHT - 10, tmag, 10, WHITE);  
-    display.display();                                  // update display
-    yield();                                            // service any web page requests
-  }
-  return tvalue;
-}
-
-//  --------------------------------------
-        
-        
-// choose from list using rotary encoder
-//  pass the number of items in list (max 8), list title, list of options in a string array
-
-int chooseFromList(byte noOfElements, String listTitle, String list[]) {
-
-  const byte noList = 10;                                // max number of items to list
-  uint32_t tTimer = millis();                            // log time of start of function
-  int highlightedItem = 0;                               // which item in list is highlighted
-  int xpos, ypos;
-  
-  // display title
-    display.clearDisplay();  
-    display.setTextSize(1);
-    display.setTextColor(WHITE,BLACK);
-    display.setCursor(10, 0);
-    display.print(listTitle);
-    display.drawLine(0, lineSpace1, display.width(), lineSpace1, WHITE);
-
-  // scroll through list
-    while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) delay(5);    // wait for button release
-    tTimer = millis();
-    while ( (digitalRead(encoder0Press) == HIGH) && (millis() - tTimer < (OLEDDisplayTimeout * 1000)) ) {   // while button is not pressed and still within time limit
-      if (encoderA.encoder0Pos >= itemTrigger) {                    // encoderA.encoder0Pos is updated via the interrupt procedure
-        noInterrupts();
-          encoderA.encoder0Pos = 0;
-        interrupts();
-        highlightedItem++;
-        tTimer = millis(); 
-      }
-      if (encoderA.encoder0Pos <= -itemTrigger) {
-        noInterrupts();
-          encoderA.encoder0Pos = 0;
-        interrupts();
-        highlightedItem--;
-        tTimer = millis();
-      }  
-      // value limits
-        if (highlightedItem > noOfElements - 1) highlightedItem = noOfElements - 1;        
-        if (highlightedItem < 0) highlightedItem = 0;
-      // display the list
-        for (int i=0; i < noOfElements; i++) {
-            if (i < (noList/2)) {
-              xpos = 0; 
-              ypos = (lineSpace1 * i+1) + topLine;
-            } else {
-              xpos = display.width() / 2;
-              ypos = lineSpace1 * (i-(noList/2)) + topLine;
-            }
-            display.setCursor(xpos, ypos);
-            if (i == highlightedItem) display.setTextColor(BLACK,WHITE);
-            else display.setTextColor(WHITE,BLACK);
-            display.print(list[i]);
-        }
-      display.display();                                    // update display
-      yield();                                              // service any web page requests
-    }
-  
-  // if it timed out set selection to cancel (i.e. item 0)
-    if (millis() - tTimer >= (OLEDDisplayTimeout * 1000)) highlightedItem=0;      
-
-//  // wait for button to be released (up to 1 second)
-//    tTimer = millis();                         // log time
-//    while ( (digitalRead(encoder0Press) == LOW) && (millis() - tTimer < 1000) ) {
-//      yield();        // service any web page requests
-//      delay(20);
-//    }
-
-    return highlightedItem;
-}
-
-
-// ----------------------------------------------
-
-
-// rotary encoder interrupt routine to update position counter when turned
-//        interrupt info: https://www.gammon.com.au/forum/bbshowpost.php?id=11488
-
-#if defined ESP32
-  void IRAM_ATTR doEncoder() {
-#else    // ESP8266
-  void ICACHE_RAM_ATTR doEncoder() {
-#endif
-     
-  bool pinA = digitalRead(encoder0PinA);
-  bool pinB = digitalRead(encoder0PinB);
-
-  if ( (encoderA.encoderPrevA == pinA && encoderA.encoderPrevB == pinB) ) return;  // no change since last time (i.e. reject bounce)
-
-  // same direction (alternating between 0,1 and 1,0 in one direction or 1,1 and 0,0 in the other direction)
-         if (encoderA.encoderPrevA == 1 && encoderA.encoderPrevB == 0 && pinA == 0 && pinB == 1) encoderA.encoder0Pos -= 1;
-    else if (encoderA.encoderPrevA == 0 && encoderA.encoderPrevB == 1 && pinA == 1 && pinB == 0) encoderA.encoder0Pos -= 1;
-    else if (encoderA.encoderPrevA == 0 && encoderA.encoderPrevB == 0 && pinA == 1 && pinB == 1) encoderA.encoder0Pos += 1;
-    else if (encoderA.encoderPrevA == 1 && encoderA.encoderPrevB == 1 && pinA == 0 && pinB == 0) encoderA.encoder0Pos += 1;
-    
-  // change of direction
-    else if (encoderA.encoderPrevA == 1 && encoderA.encoderPrevB == 0 && pinA == 0 && pinB == 0) encoderA.encoder0Pos += 1;   
-    else if (encoderA.encoderPrevA == 0 && encoderA.encoderPrevB == 1 && pinA == 1 && pinB == 1) encoderA.encoder0Pos += 1;
-    else if (encoderA.encoderPrevA == 0 && encoderA.encoderPrevB == 0 && pinA == 1 && pinB == 0) encoderA.encoder0Pos -= 1;
-    else if (encoderA.encoderPrevA == 1 && encoderA.encoderPrevB == 1 && pinA == 0 && pinB == 1) encoderA.encoder0Pos -= 1;
-
-    else if (serialDebug) Serial.println("Error: invalid rotary encoder pin state - prev=" + String(encoderA.encoderPrevA) + "," 
-                                          + String(encoderA.encoderPrevB) + " new=" + String(pinA) + "," + String(pinB));
-    
-  // update previous readings
-    encoderA.encoderPrevA = pinA;
-    encoderA.encoderPrevB = pinB;
 }
 
 
