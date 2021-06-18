@@ -49,7 +49,7 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "22Jan21";                      // version of this sketch
+  const char* sversion = "18Jun21";                      // version of this sketch
 
   const bool serialDebug = 1;                            // provide extended debug info on serial port
 
@@ -118,10 +118,10 @@ uint32_t LEDtimer = millis();           // used for flashing the LED
 #if ENABLE_EMAIL
     #include "email.h"
     // stores for email messages
-      const int maxMessageLength = 600;                         // maximum length of email message
-      const int maxSubjectLength = 150;                         // maximum length of email subject
-      char _message[maxMessageLength];
-      char _subject[maxSubjectLength];
+      //const int maxMessageLength = 600;                         // maximum length of email message
+      //const int maxSubjectLength = 150;                         // maximum length of email subject
+      //char _message[maxMessageLength];
+      //char _subject[maxSubjectLength];
     // forward declaration
       void smtpCallback(SMTP_Status status);    // the procedure called when status info is available
       bool sendEmail(char*, char* , char*);

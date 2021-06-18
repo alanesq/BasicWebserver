@@ -104,8 +104,6 @@ Common Sim800 AT commands:
         AT+HTTPREAD	Read the data of the HTTP server
         AT+HTTPTERM	Terminate HTTP service
         AT+HTTPSTATUS?	Check HTTP status
- 
- */
         
 */
 
