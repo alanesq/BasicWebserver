@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      Over The Air updates (OTA) - 15Mar21
+ *      Over The Air updates (OTA) - 25Mar21
  * 
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *                                                                                              
@@ -52,7 +52,7 @@ void otaSetup() {
           if (upload.status == UPLOAD_FILE_START) {
             if (serialDebug) Serial.setDebugOutput(true);
             if (serialDebug) Serial.printf("Update: %s\n", upload.filename.c_str());
-            if (!Update.begin()) { //start with max available size
+            if (!Update.begin()) {        //start with max available size
               if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -60,7 +60,7 @@ void otaSetup() {
               if (serialDebug) Update.printError(Serial);
             }
           } else if (upload.status == UPLOAD_FILE_END) {
-            if (Update.end(true)) { //true to set the size to the current progress
+            if (Update.end(true)) {      //true to set the size to the current progress
               if (serialDebug) Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
             } else {
               if (serialDebug) Update.printError(Serial);
@@ -120,12 +120,15 @@ void handleOTA(){
   WiFiClient client = server.client();          // open link with client
 
   // log page request including clients IP address
-      IPAddress cip = client.remoteIP();
-      //log_system_message("OTA web page requested from: " + String(cip[0]) + "." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]));
+    IPAddress cip = client.remoteIP();
+    String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
+    clientIP = decodeIP(clientIP);               // check for known IP addresses
+    log_system_message("OTA page requested from: " + clientIP);  
 
   // check if valid password supplied
     if (server.hasArg("pwd")) {
       if (server.arg("pwd") == OTAPassword) otaSetup();    // Enable over The Air updates (OTA)
+      else log_system_message("Invalid OTA password entered from " + clientIP);
     }
 
 

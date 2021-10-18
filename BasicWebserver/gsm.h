@@ -1,6 +1,8 @@
 /************************************************************************************************** 
  *
- *                             GSM module - 01Feb21
+ *                             GSM module - 04Mar21
+ *                             
+ *             Note:  Not yet fully working - will need modifying for esp32 as no software serial
  * 
  *
  *  See:  https://lastminuteengineers.com/a6-gsm-gprs-module-arduino-tutorial/
@@ -20,7 +22,7 @@
  *        A standard received sms will look like this:
  *                                                      +CIEV: "MESSAGE",1
  *                                                     
- *                                                      +CMT: "+447812343449",,"2021/01/20,10:46:09+00"
+ *                                                      +CMT: "+447834543449",,"2021/01/20,10:46:09+00"
  *                                                      This is a test text message   
  *       
  *        A message from GiffGaff will look like this (i.e. no date or number info):
@@ -33,7 +35,7 @@
 
 
  Notes: 
- 
+
     Mainly designed for use with the Sim800 GSM board
         Note: it requires an odd voltage and allegedly up to 2 amps - I have found running it from 5 volts
               going through a diode to drop the voltage along with a good sized smoothing capacitor seems to work ok.
@@ -104,13 +106,15 @@ Common Sim800 AT commands:
         AT+HTTPREAD	Read the data of the HTTP server
         AT+HTTPTERM	Terminate HTTP service
         AT+HTTPSTATUS?	Check HTTP status
+ 
+
         
 */
 
  //            --------------------------- settings -------------------------------
 
 
-const String phoneNumber = "+44xxxxxxxxxx";        // phone number to send sms messages to 
+const String phoneNumber = "+440000000000";        // phone number to send sms messages to 
 
 const String GSM_APN = "giffgaff.com";             // APN for mobile data
 
@@ -120,14 +124,14 @@ bool GSMresetPinActive = 1;                        // reset active state (i.e. 1
 const int TxPin = D5;                              // Tx pin
 const int RxPin = D6;                              // Rx pin
 
-int checkGSMmodulePeriod = 30000;                  // how often to check GSM module is still responding ok (ms)
+int checkGSMmodulePeriod = 600;                    // how often to check GSM module is still responding ok (seconds)
 
-int checkGSMdataPeriod = 500;                      // how often to check for incoming data from GSM module (ms)
+int checkGSMdataPeriod = 1;                        // how often to check for incoming data from GSM module (seconds)
 
 const int GSMbuffer = 512;                         // buffer size for incoming data from GSM module
 
 
-// --------------------------------------------------------------------------
+//            --------------------------------------------------------------------
 
 
 // forward declarations
@@ -136,7 +140,7 @@ const int GSMbuffer = 512;                         // buffer size for incoming d
   bool checkGSMmodule(int);
   bool resetGSM(int);
   void setupGSM();
-  void requestWebPageGSM(String);
+  bool requestWebPageGSM(String, String, int);
   void dataReceivedFromGSM();
 
 
@@ -203,7 +207,7 @@ void setupGSM() {
     GSMserial.begin(9600, SWSERIAL_8N1, D5, D6, false, GSMbuffer); while(!GSMserial) delay(200);
 
   // check GSM module is responding (up to 40 attempts, this will set the flag 'GSMconnected')
-    checkGSMmodule(40);
+    checkGSMmodule(30);
 
   if (GSMconnected) {
     contactGSMmodule("ATI");             // Get the module name and revision
@@ -225,7 +229,7 @@ void GSMloop() {
   if (GSMconnected) {
 
     // periodic check that GSM module is still responding
-      if ((unsigned long)(millis() - checkGSMmoduleTimer) >= checkGSMmodulePeriod ) {
+      if ((unsigned long)(millis() - checkGSMmoduleTimer) >= (checkGSMmodulePeriod * 1000) ) {
           checkGSMmoduleTimer = millis();
           if (!checkGSMmodule(2)) {
             if (serialDebug) Serial.println("ERROR: GSM module has stopped responding");
@@ -233,7 +237,7 @@ void GSMloop() {
       }    
 
     // periodic check for any incoming data on serial or from gsm module
-      if ((unsigned long)(millis() - checkGSMdataTimer) >= checkGSMdataPeriod ) {
+      if ((unsigned long)(millis() - checkGSMdataTimer) >= (checkGSMdataPeriod * 1000) ) {
         checkGSMdataTimer = millis();
         dataReceivedFromGSM();
       } 
@@ -308,21 +312,20 @@ bool checkGSMmodule(int maxTries) {
 
 void sendSMS(String SMSnumber, String SMSmessage) {
 
-  int sdel = 1000;            // delay between commands
+  //const int sdel = 1000;            // delay between comands
+  String reply;
     
   if (serialDebug) Serial.println("Sending SMS to '" + SMSnumber + "', message = '" + SMSmessage + "'");
 
-  if (serialDebug) Serial.println("Sending SMS to '" + SMSnumber + "', message = '" + SMSmessage + "'");
-
-  contactGSMmodule("AT+CMGF=1");                         // put in to sms mode
-  delay(sdel);
+  reply = contactGSMmodule("AT+CMGF=1");                         // put in to sms mode
+  //delay(sdel);
   
-  contactGSMmodule("AT+CMGS=\"" + SMSnumber + "\"");     // e.g. "AT+CMGS=\"+ZZxxxxxxxxxx\"" - change ZZ with country code and xxxxxxxxxxx with phone number to sms
-  delay(sdel);
+  reply = contactGSMmodule("AT+CMGS=\"" + SMSnumber + "\"");     // e.g. "AT+CMGS=\"+ZZxxxxxxxxxx\"" - change ZZ with country code and xxxxxxxxxxx with phone number to sms
+  //delay(sdel);
   
-  contactGSMmodule(SMSmessage);                          // the message to send
+  reply = contactGSMmodule(SMSmessage);                          // the message to send
   
-  GSMserial.write(26);                                   // Ctrl Z
+  GSMserial.write(26);                                           // Ctrl Z
   
 }
 /*
@@ -340,51 +343,65 @@ Response when text was sent ok  (the 4 changes):
 // ----------------------------------------------------------------
 // see: https://predictabledesigns.com/the-sim800-cellular-module-and-arduino-a-powerful-iot-combo/
 
-void requestWebPageGSM(String URL) {
+bool requestWebPageGSM(String ip, String page, int port) {
 
-    int sdel = 1000;            // delay between commands
+    const int sdel = 1000;            // delay between commands
+    ip = "http://" + ip;
+    String reply;
 
-    if (serialDebug) Serial.println("Requesting web page via GSM '" + URL + "', message = '");
+    if (serialDebug) Serial.println("Requesting web page via GSM '" + ip + ":" + String(port) + page + "', message = '");
     
     // Sim800:
     
-        // contactGSMmodule("AT+CSQ");                                      // Check for signal quality
+        // reply = contactGSMmodule("AT+CSQ");                                      // Check for signal quality
         
-        contactGSMmodule("AT+CGATT=1");                                     // Attach to a GPRS network
+        reply = contactGSMmodule("AT+CGATT=1");                                     // Attach to a GPRS network
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");              // Configure bearer profile 1
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+SAPBR=3,1,\"APN\",GSM_APN");                   // APN for phone network
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+SAPBR=1,1");                                   // To open a GPRS context  (slight delay then OK)
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+HTTPINIT");                                    // Init HTTP service
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+HTTPPARA=\"CID\",1");                          // Set parameters for HTTP session
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+HTTPPARA=\"REDIR\",1");                        // Auto redirect  
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+HTTPPARA=\"URL\",\"" + ip + ":" + String(port) + page + "\"");     // send web site URL
+        //delay(sdel);
+        
+        reply = contactGSMmodule("AT+HTTPACTION=0");                                // Get the web page -  sfter delay responds "+HTTPACTION: 0,200,9"
         delay(sdel);
+
+        // Note: All above commands should get a response of an echo of the command sent on the first line and "OK" on the second line
+        //       The last line will get a second response a few seconds later,     e.g. blank first line, second line = "+HTTPACTION: 0,200,9"
         
-        contactGSMmodule("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"");              // Configure bearer profile 1
-        delay(sdel);
-        
-        contactGSMmodule("AT+SAPBR=3,1,\"APN\",GSM_APN");                   // APN for phone network
-        delay(sdel);
-        
-        contactGSMmodule("AT+SAPBR=1,1");                                   // To open a GPRS context  (slight delay then OK)
-        delay(sdel);
-        
-        contactGSMmodule("AT+HTTPINIT");                                    // Init HTTP service
-        delay(sdel);
-        
-        contactGSMmodule("AT+HTTPPARA=\"CID\",1");                          // Set parameters for HTTP session
-        delay(sdel);
-        
-        contactGSMmodule("AT+HTTPPARA=\"REDIR\",1");                        // Auto redirect  
-        delay(sdel);
-        
-        contactGSMmodule("AT+HTTPPARA=\"URL\",\"" + URL + "\"");            // input web site URL
-        delay(sdel);
-        
-        contactGSMmodule("AT+HTTPACTION=0");                                // Get the web page -  sfter delay responds "+HTTPACTION: 0,200,9"
-        delay(sdel * 2);
-        
-        contactGSMmodule("AT+HTTPREAD");                                    // Read the data of the HTTP server - reply
-    
+        reply = contactGSMmodule("AT+HTTPREAD");                                    // Read the data of the HTTP server - reply
+
+        // Note: See below for example reply from above command
+
+        // check if ok received
+          if (reply.indexOf("OK") >= 0) {
+            if (serialDebug) Serial.println("Request sent ok");
+            return 1;
+          } else {
+            if (serialDebug) Serial.println("Error sending request");
+            return 0;
+          }
 
 
   // A6
-  //    contactGSMmodule("AT+HTTPGET=\"" + URL + "\"");                     // request URL 
+  //    reply = contactGSMmodule("AT+HTTPGET=\"" + URL + "\"");                     // request URL 
         
-  
 }
 /*
 
@@ -422,21 +439,23 @@ void requestWebPageGSM(String URL) {
 
 String contactGSMmodule(String GSMcommand) {
 
-  int delayTime = 500;                        // length of delays
+  const int delayTime = 600;                  // length of delays (ms)
   char replyStore[GSMbuffer + 1];             // store for reply from GSM module
   int received_counter = 0;                   // number of characters which have been received
 
+  // forward any incoming data an serial to the gsm module
+    if (Serial.available()) {
+      delay(delayTime);      // make sure full message has time to come in first
+      while (Serial.available()) {
+          GSMserial.write(Serial.read());   
+      }
+    }
+   
   // if a command was supplied send it to GSM module
     if (GSMcommand != "") {
       if (serialDebug) Serial.println("Sending command to GSM module: '" + GSMcommand +"'");
       GSMserial.println(GSMcommand);
       delay(delayTime);
-    }
-  
-  // forward any incoming data an serial to the gsm module
-    if (GSMserial.available()) delay(delayTime);      // make sure full message has time to come in first
-    while (Serial.available()) {
-        GSMserial.write(Serial.read());   
     }
   
   // if any data coming in from GSM module copy it to a string

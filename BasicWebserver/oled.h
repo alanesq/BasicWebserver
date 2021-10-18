@@ -22,8 +22,8 @@ choose from a list or display a message.
  Notes:   text size 1 = 21 x 8 characters
           text size 2 = 10 x 4
 
- for more oled info see: https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
-
+ for more oled info    see: https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
+                    
 
  
  **************************************************************************************************/
@@ -35,12 +35,12 @@ choose from a list or display a message.
     void menu2();
     bool confirmActionRequired();  
     void ICACHE_RAM_ATTR doEncoder();
-    void setMenu(byte, String);
+    void setMenu(int, String);
     int enterValue(String, int, int, int, int);
     void menuItemSelection();
     bool menuCheck();
     void staticMenu();
-    int chooseFromList(byte, String, String[]);
+    int chooseFromList(int, String, String[]);
     void reWaitKeypress(int);
     void storeSettings();
     void exitMenu(); 
@@ -49,10 +49,10 @@ choose from a list or display a message.
   #include <Adafruit_GFX.h>
   #include <Adafruit_SSD1306.h>
   
-  // settings
-    #define encoder0PinA  D5                  // gpio pins
-    #define encoder0PinB  D6
-    #define encoder0Press D7                  
+  // oled settings
+    #define encoder0PinA  14                  // 14 = D5 on esp8266 
+    #define encoder0PinB  12                  // 12 = D6 on esp8266
+    #define encoder0Press 13                  // 13 = D7 on esp8266
     int OLEDDisplayTimeout = 10;              // inactivity time on rotary encoder after which display goes blank (seconds)
     int itemTrigger = 2;                      // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
 
@@ -480,7 +480,7 @@ int enterValue(String title, int start, int stepSize, int low, int high) {
 // choose from list using rotary encoder
 //  pass the number of items in list (max 8), list title, list of options in a string array
 
-int chooseFromList(byte noOfElements, String listTitle, String list[]) {
+int chooseFromList(int noOfElements, String listTitle, String list[]) {
 
   const byte noList = 10;                                // max number of items to list
   uint32_t tTimer = millis();                            // log time of start of function
@@ -646,7 +646,7 @@ void displayTimeOLED() {
 // set menu item
 // pass: new menu items number, name         (blank iname clears all entries)
 
-void setMenu(byte inum, String iname) {
+void setMenu(int inum, String iname) {
   if (inum >= menuMax) return;    // invalid number
   if (iname == "") {              // clear all menu items
     for (int i; i < menuMax; i++)  menuOption[i] = "";

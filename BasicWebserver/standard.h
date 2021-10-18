@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 03Apr21
+ *      Standard procedures - 18Oct21
  *      
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *      
@@ -15,7 +15,7 @@
   void handleLogpage();
   void handleNotFound();
   void handleReboot();
-  void WIFIcheck();
+  bool WIFIcheck();
   String decodeIP(String);
 
 
@@ -32,8 +32,41 @@
 // misc variables
   String lastClient = "n/a";                  // IP address of most recent client connected
   int system_message_pointer = 0;             // pointer for current system message position
-  String system_message[LogNumber + 1];       // system log message store  
+  String system_message[LogNumber + 1];       // system log message store  (suspect serial port issues caused if not +1 ???)
   
+
+// ----------------------------------------------------------------
+//                            -repeatTimer
+// ---------------------------------------------------------------- 
+// repeat an operation periodically 
+// example to repeat every 2 seconds:   static repeatTimer timer1;             // set up a timer     
+//                                      if (timer1.check(2000)) {do stuff};    // repeat every 2 seconds
+
+class repeatTimer {
+
+  private:
+    uint32_t  rLastTime;                                              // store last time event triggered
+
+  public:
+    repeatTimer() {
+      reset();
+    }
+
+    bool check(uint32_t r_interval, bool r_reset=1) {                 // check if provided time has passed 
+      if ((unsigned long)(millis() - rLastTime) >= r_interval ) {
+        if (r_reset) reset();
+        return 1;
+      } else {
+        return 0;
+      }
+    }
+
+    void reset() {                                                    // reset the timer
+      rLastTime = millis();
+    }
+
+};
+
 
 // ----------------------------------------------------------------
 //                    -decode IP addresses
@@ -42,8 +75,12 @@
 
 String decodeIP(String IPadrs) {
   
-    if (IPadrs == "192.168.1.176") IPadrs = "laptop";
-    else if (IPadrs == "192.168.1.103") IPadrs = "phone";
+    if (IPadrs == "192.168.1.176") IPadrs = "HA server";
+    else if (IPadrs == "192.168.1.103") IPadrs = "Parlour laptop";
+    else if (IPadrs == "192.168.1.101") IPadrs = "Bedroom laptop";
+    else if (IPadrs == "192.168.1.169") IPadrs = "Linda's laptop";
+    else if (IPadrs == "192.168.1.170") IPadrs = "Shed 1 laptop";
+    else if (IPadrs == "192.168.1.143") IPadrs = "Shed 2 laptop";
 
     // log last IP client connected
       if (IPadrs != lastClient) {
@@ -189,8 +226,8 @@ void handleLogpage() {
     for (int i=0; i < LogNumber; i++){         // count through number of entries
       client.print(system_message[lpos]);
       client.println("<br>");
+      if (lpos == 0) lpos = LogNumber;
       lpos--;
-      if (lpos < 0) lpos = LogNumber - 1;
     }
     
     // close html page
@@ -258,7 +295,7 @@ void handleReboot(){
 //                                -wifi connection check
 // --------------------------------------------------------------------------------------
 
-void WIFIcheck() {
+bool WIFIcheck() {
   
     if (WiFi.status() != WL_CONNECTED) {
       if ( wifiok == 1) {
@@ -273,7 +310,116 @@ void WIFIcheck() {
       }
     }
 
+    return wifiok;
+
 }
+
+
+// --------------------------------------------------------------------------------------
+//                                    -LED control code
+// --------------------------------------------------------------------------------------
+// Supply gpio pin, if LED ON when pin is high or low
+// useage:      Led led1(LED_1_GPIO, HIGH);       led1.on();
+
+class Led {
+  
+  private:
+    byte pin;           // gpio pin
+    bool onState;       // if on when pin is high or low
+    
+  public:
+    Led(byte l_pin, bool l_onState = HIGH) {
+      this->pin = l_pin;
+      this->onState = l_onState;
+      init();
+    }
+
+    void init() {
+      pinMode(pin, OUTPUT);
+      off();
+    }
+
+    void on() {
+      digitalWrite(pin, onState);
+    }
+
+    void off() {
+      digitalWrite(pin, !onState);
+    }
+
+    void flip() {
+      digitalWrite(pin, !digitalRead(pin));   // flip the leds status
+    }
+
+    bool status() {                           // returns HIGH if LED is on
+      bool s_state = digitalRead(pin);
+      if (onState == HIGH) return s_state;
+      else return !s_state;
+    }
+
+    void flash(int f_reps=1, int f_ledDelay=350) {
+      bool f_tempStat = digitalRead(pin);
+      if (f_tempStat == onState) {            // if led is already on
+        off();
+        delay(f_ledDelay);
+      }
+      for (int i=0; i<f_reps; i++) {
+        on();
+        delay(f_ledDelay);
+        off();
+        delay(f_ledDelay);
+      }
+      if (f_tempStat == onState) on();          // return led status
+    }
+}; 
+
+
+// --------------------------------------------------------------------------------------
+//                                   -button control code
+// --------------------------------------------------------------------------------------
+// Supply gpio pin, normal state (i.e. high or low when not pressed)
+// useage:      Button button1(GPIO_PIN, HIGH);     if (button1.isPressed()) {};
+// Note: Because of the debouncing used it needs to be polled regularly as a single check will be ignored
+
+class Button {
+  
+  private:
+    byte pin;                                 // gpio pin
+    bool normalState;                         // pin state when button not pressed
+    bool state;                               // current status of button
+    unsigned long debounceDelay = 40;         // delay time for debouncing (ms)
+    
+  public:
+    Button(byte b_pin, bool b_normalState = LOW) {
+      this->pin = b_pin;
+      this->normalState = b_normalState;
+      init();
+    }
+
+    void init() {
+      pinMode(pin, INPUT);
+      state = digitalRead(pin);               // store current state of button
+    }
+
+    void update() {
+      bool u_newReading = digitalRead(pin);
+      if (u_newReading != state) {            // if the button status has changed
+        delay(debounceDelay);
+        u_newReading = digitalRead(pin);
+      }
+      state = u_newReading;
+    }
+
+    bool getState() {                         // returns the logic state of the gpio pin
+      update();
+      return state;
+    }
+
+    bool isPressed() {                        // returns TRUE if button is curently pressed
+      if (normalState == LOW) return getState();
+      else return (!getState());
+    }
+}; 
 
 
 // --------------------------- E N D -----------------------------

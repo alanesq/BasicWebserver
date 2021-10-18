@@ -1,10 +1,12 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections using WifiManager - 13Jan21
+ *      Wifi / NTP Connections using WifiManager - 13Oct21
  *      
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *             
  *      Set up wifi for either esp8266 or esp32 plus NTP (network time)
+ *      
+ *      see:  https://nodemcu.readthedocs.io/en/release/modules/wifi/
  *                    
  *      Libraries used: 
  *                      ESP_Wifimanager - https://github.com/khoih-prog/ESP_WiFiManager
@@ -42,9 +44,6 @@
   String requestWebPage(String, String, int, int);
   
   
-// bool wifiok = 0;                // flag if wifi connection is ok
-
-
 // ----------------------------------------------------------------
 //                              -Startup
 // ----------------------------------------------------------------
@@ -96,7 +95,6 @@ void startWifiManager() {
 
   // Connect to Wifi using WifiManager
     ESP_WiFiManager ESP_wifiManager("AutoConnectAP");
-    // ESP_wifiManager.resetSettings();         // erase stored wifimanager settings
     ESP_wifiManager.setConfigPortalTimeout(120);
     ESP_wifiManager.setDebugOutput(true);   
 
@@ -152,16 +150,22 @@ String currentTime(){
 
    if (IsBST()) t+=3600;     // add one hour if it is Summer Time
 
-   String ttime = String(hour(t)) + ":" ;                                             // hours
-   if (minute(t) < 10) ttime += "0";                                                  // minutes
-   ttime += String(minute(t)) + " ";
-   ttime += DoW[weekday(t)-1] + " ";                                                  // day of week
-   ttime += String(day(t)) + "/" + String(month(t)) + "/" + String(year(t)) + " ";    // date
+   String ttime = String(hour(t)) + ":" ;          // hours
+   
+   int tmin = minute(t);
+   if (tmin < 10) ttime += "0";                    // minutes
+   ttime += String(tmin) + ":";
+   
+   int tsec = second(t);
+   if (tsec < 10) ttime += "0";                    // seconds
+   ttime += String(tsec);   
+   
+   ttime += " " + DoW[weekday(t)-1] + "_";                                            // day of week
+   ttime += String(day(t)) + "-" + String(month(t)) + "-" + String(year(t)) + " ";    // date
 
    return ttime;
    
 }  // currentTime
-
 
 
 //-----------------------------------------------------------------------------
@@ -320,15 +324,16 @@ time_t getNTPTime() {
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-// parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
-//     e.g. requestWebPage("192.168.1.166", "/log", 80, 600, "");
+// parameters: ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
+//     return: web page reply as a string
+//      Usage: requestWebPage("192.168.1.166", "/log", 80, 600, "");
 
 String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
 
   int maxWaitTime = 3000;                 // max time to wait for reply (ms)
 
   char received[maxChars + 1];            // temp store for incoming character data
-  int received_counter = 0;               // number of characters which have been received
+  int received_counter = 0;               // counter of number of characters which have been received
 
   if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/" 
 
@@ -348,21 +353,23 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
       if (serialDebug) Serial.println("Connected to host - sending request...");
     
     // send request - A basic request looks something like: "GET /index.html HTTP/1.1\r\nHost: 192.168.0.4:8085\r\n\r\n"
-      client.print("GET " + page + " HTTP/1.1\r\n" +
-                   "Host: " + ip + "\r\n" + 
-                   "Connection: close\r\n\r\n");
+      client.println("GET " + page + " HTTP/1.1 ");
+      client.println("Host: " + ip );
+      client.println("User-Agent: arduino-ethernet");
+      client.println("Connection: close");
+      client.println();    // needed to end HTTP header
   
       if (serialDebug) Serial.println("Request sent - waiting for reply...");
   
     // Wait for a response
       uint32_t ttimer = millis();
-      while ( !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
+      while ( client.connected() && !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
         delay(10);
       }
       if ( ((uint32_t)(millis() - ttimer) > maxWaitTime ) && serialDebug) Serial.println("-Timed out");
 
     // read the response
-      while ( client.available() && received_counter < maxChars ) {
+      while ( client.connected() && client.available() && received_counter < maxChars ) {
         delay(4); 
         received[received_counter] = char(client.read());     // read one character
         received_counter+=1;
@@ -392,5 +399,20 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
   
 }  // requestWebPage
 
+
+/*
+    Idea for better code:
+    
+                                char espBuffer[1024] = {0};
+                                int readCount = 0;
+                                long startTime = millis();
+
+                                while (millis() - startTime < 5000) { // Run for at least 5 seconds 
+                                // Check to make sure we don't exceed espBuffer's boundaries
+                                    if (ESPserial.available() > readCount + sizeof espBuffer - 1) break;
+                                    readCount += ESPserial.readBytes(espBuffer + readCount, ESPserial.available());
+                                }
+
+*/
 
 // --------------------------- E N D -----------------------------
