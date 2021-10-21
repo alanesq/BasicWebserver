@@ -1,5 +1,5 @@
 //
-//    neopixel demo of using VECTOR and CLASS - 17oct21
+//    neopixel demo of using VECTOR and CLASS - 20oct21
 //
 
 const bool serialDebug = 1;
@@ -13,10 +13,12 @@ const bool serialDebug = 1;
   
   #define NEOPIXEL_PIN    5         // Neopixel data gpio pin (Note: should have 330k resistor ideally) (5 = D1 on esp8266)
 
-  int g_PowerLimit =      900;      // power limit in milliamps for Neopixels (USB usually good for 800)
+  int g_PowerLimit =      800;      // power limit in milliamps for Neopixels (USB usually good for 800)
 
   int g_Brightness =      32;       // LED maximum brightness scale (1-255)
 
+  int iLED = 22;                    // onboard indicator led
+  
 
 //            --------------------------------------------------------------------
 
@@ -36,8 +38,8 @@ CRGB g_LEDs[NUM_NEOPIXELS] = {0};             // Frame buffer for FastLED
 class Oscillators {
   
   private:
-    CRGB* LEDarray;                // led data location
-    int o_maxNum;                  // Maximum number of oscillators
+    CRGB* oLEDarray;                // led data location
+    int oMaxNum;                   // Maximum number of oscillators
     int oCounter = 0;              // Number of Oscillators running
     std::vector<int> oPosition;    // Oscillator position
     std::vector<bool> oDirection;  // Oscillator direction
@@ -45,13 +47,16 @@ class Oscillators {
     
   public:
     Oscillators(CRGB* o_LEDarray, size_t o_maxNum) {
-      this->LEDarray = o_LEDarray;
-      this->o_maxNum = o_maxNum;
+      this->oLEDarray = o_LEDarray;
+      this->oMaxNum = o_maxNum;
       addone();
     }
 
+    ~Oscillators() {
+    }
+
     void addone() {
-      if (oCounter == o_maxNum) return;
+      if (oCounter == oMaxNum) return;
       oCounter ++;
       if (serialDebug) Serial.println("Adding one - " + String(oCounter));
       oColour.push_back(CHSV(random(255), 255, 255));
@@ -77,7 +82,7 @@ class Oscillators {
 
     void show() {
       for(int i=0; i<oPosition.size(); i++) {
-        LEDarray[oPosition[i]] = oColour[i];
+        oLEDarray[oPosition[i]] = oColour[i];
       }
     }
 }; 
@@ -88,8 +93,10 @@ class Oscillators {
 // ---------------------------------------------------------------- 
 
 void setup() {
-  Serial.begin(115200);
-  if (serialDebug) Serial.println("\n\n\n\Starting\n");
+  Serial.begin(serialSpeed); while (!Serial); delay(50);       // start serial comms   
+  Serial.println("\n\n\n\Starting\n");
+
+  pinMode(iLED, OUTPUT);
   
   if (serialDebug) Serial.println("Initialising neopixels");
   pinMode(NEOPIXEL_PIN, OUTPUT);
@@ -118,6 +125,11 @@ void loop() {
       if (random(2) == 1) otest.addone();
       else otest.removeone();    
     }
+
+
+  EVERY_N_MILLISECONDS(1000) { 
+    digitalWrite(iLED, !digitalRead(iLED));
+  }
     
 }
 
