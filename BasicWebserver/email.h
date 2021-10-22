@@ -44,7 +44,7 @@
 
   const int MaxEmailAttempts = 5;                           // maximum email send attempts 
 
-  
+  #define _SenderName "espcam"                              // name of sender (no spaces)
   
 // Your settings here
 
