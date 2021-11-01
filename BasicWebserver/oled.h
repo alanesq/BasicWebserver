@@ -1,17 +1,12 @@
 /**************************************************************************************************
  *  
- *      OLED display Menu System - i2c version SSD1306 - 18Jun21
+ *      OLED display Menu System - i2c version SSD1306 - 01Nov21
  * 
  *      part of the BasicWebserver sketch
  *                                   
  * 
  **************************************************************************************************
       
- oled pins: sda=d2, scl=d1    
- oled address = 3C 
- rotary encoder pins: d5, d6, d7 (button)
- note: button can go on d3 instead of d7 to free up a spare io pin
- 
  The sketch displays a menu on the oled and when an item is selected it sets a 
  flag and waits until the event is acted upon.  Max menu items on a 128x64 oled 
  is four.
@@ -28,6 +23,28 @@ choose from a list or display a message.
  
  **************************************************************************************************/
 
+//                                        Settings
+
+//    // esp8266
+//    #define encoder0PinA  14                  // Rotary encoder gpio pin, 14 = D5 on esp8266 
+//    #define encoder0PinB  12                  // Rotary encoder gpio pin, 12 = D6 on esp8266
+//    #define encoder0Press 13                  // Rotary encoder button gpio pin, 13 = D7 on esp8266
+//    #define OLEDC 0                           // oled clock pin (set to 0 for default) 
+//    #define OLEDD 0                           // oled data pin
+
+    //  esp32 lolin lite
+    #define encoder0PinA  25                  // Rotary encoder gpio pin 
+    #define encoder0PinB  33                  // Rotary encoder gpio pin 
+    #define encoder0Press 32                  // Rotary encoder button gpio pin 
+    #define OLEDC 26                          // oled clock pin (set to 0 for default) 
+    #define OLEDD 27                          // oled data pin
+
+    int OLEDDisplayTimeout = 10;              // inactivity trigger time on rotary encoder (seconds)
+    int itemTrigger = 1;                      // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
+
+
+ //  ************************************************************************************************  
+ 
 
 // forward declarations 
     void menuItemActions();
@@ -46,15 +63,9 @@ choose from a list or display a message.
     void exitMenu(); 
     void displayTimeOLED();
 
+  #include <Wire.h>
   #include <Adafruit_GFX.h>
   #include <Adafruit_SSD1306.h>
-  
-  // oled settings
-    #define encoder0PinA  14                  // 14 = D5 on esp8266 
-    #define encoder0PinB  12                  // 12 = D6 on esp8266
-    #define encoder0Press 13                  // 13 = D7 on esp8266
-    int OLEDDisplayTimeout = 10;              // inactivity time on rotary encoder after which display goes blank (seconds)
-    int itemTrigger = 2;                      // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
 
   // rotary encoder  
     volatile int encoder0Pos = 0;             // current value selected with rotary encoder (updated in interrupt routine)
@@ -98,6 +109,8 @@ void oledSetup() {
     pinMode(encoder0PinB, INPUT);
 
   // initialise the oled display
+    if (OLEDC == 0) Wire.begin();
+    else Wire.begin(OLEDD, OLEDC);
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
       Serial.println(("\nError initialising the oled display"));
     }
