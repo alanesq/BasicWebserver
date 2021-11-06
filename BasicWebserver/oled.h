@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      OLED display simple none blocking menu System - i2c version SSD1306 - 03Nov21
+ *      OLED display simple none blocking menu System - i2c version SSD1306 - 04Nov21
  * 
  *      part of the BasicWebserver sketch
  *                                   
@@ -39,7 +39,15 @@
     #define encoder0Press 32                  // Rotary encoder button gpio pin 
     #define OLEDC 26                          // oled clock pin (set to 0 for default) 
     #define OLEDD 27                          // oled data pin
+    #define OLEDE 0                           // oled enable pin
 
+//    //  esp32 HiLetGo - https://robotzero.one/heltec-wifi-kit-32/
+//    #define encoder0PinA  25                  // Rotary encoder gpio pin 
+//    #define encoder0PinB  33                  // Rotary encoder gpio pin 
+//    #define encoder0Press 32                  // Rotary encoder button gpio pin 
+//    #define OLEDC 15                          // oled clock pin (set to 0 for default) 
+//    #define OLEDD 4                           // oled data pin
+//    #define OLEDE 16                          // oled enable pin
     
 //    // esp8266
 //    #define encoder0PinA  14                  // Rotary encoder gpio pin, 14 = D5 on esp8266 
@@ -47,72 +55,74 @@
 //    #define encoder0Press 13                  // Rotary encoder button gpio pin, 13 = D7 on esp8266
 //    #define OLEDC 0                           // oled clock pin (set to 0 for default) 
 //    #define OLEDD 0                           // oled data pin
+//    #define OLEDE 0                           // oled enable pin
 
+    // oLED
+      #define OLED_ADDR 0x3C                    // OLED i2c address
+      #define SCREEN_WIDTH 128                  // OLED display width, in pixels (usually 128)
+      #define SCREEN_HEIGHT 64                  // OLED display height, in pixels (64 for larger oLEDs)
+      #define OLED_RESET -1                     // Reset pin gpio (or -1 if sharing Arduino reset pin)
 
-    int menuTimeout = 20;                     // menu inactivity timeout (seconds)
-    const bool menuLargeText = 0;             // If larger text should be displayed to make reading menus easier
-    const int maxMenuItems = 20;              // max number of items used in any of the menus
-    const int itemTrigger = 1;                // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
-    const int topLine = 18;                   // y position of second bank of menu display (18 with two colour displays)
-    const byte lineSpace1 = 9;                // line spacing for textsize 1 (small text)
-    const byte lineSpace2 = 17;               // line spacing for textsize 2 (large text)
-    const int displayMaxLines = 5;            // max lines that can be displayed in lower section of display in textsize1
-    const int MaxMenuTitleLength = 10;        // max characters per line when using text size 2
-    const bool reButtonPressedState = LOW;    // gpio pin state when the button is pressed
+    // Misc
+      int menuTimeout = 20;                     // menu inactivity timeout (seconds)
+      const bool menuLargeText = 0;             // show larger text when possible (if struggling to read the small text)
+      const int maxMenuItems = 12;              // max number of items used in any of the menus (keep as low as possible to save memory)
+      const int itemTrigger = 1;                // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
+      const int topLine = 18;                   // y position of lower area of the display (18 with two colour displays)
+      const byte lineSpace1 = 9;                // line spacing for textsize 1 (small text)
+      const byte lineSpace2 = 17;               // line spacing for textsize 2 (large text)
+      const int displayMaxLines = 5;            // max lines that can be displayed in lower section of display in textsize1 (5 on larger oLeds)
+      const int MaxMenuTitleLength = 10;        // max characters per line when using text size 2 (usually 10)
+      const bool reButtonPressedState = LOW;    // gpio pin state when the button is pressed (usually LOW)
     
 
 // -------------------------------------------------------------------------------------------------
 
 
-// forward declarations 
+// forward declarations (to allow the procedures to be out of logical order below)
   void ICACHE_RAM_ATTR doEncoder();
   void resetMenu();
   void serviceMenu();
   int checkEncoder();
-  void serviceValue();
+  int serviceValue(bool);
   void createList(String, int, String *_list);
   void displayMessage(String, String);
   void defaultMenu();
+  void reUpdateButton();
   
 
 // menus
-  // possible modes for the menu system
+  // possible modes for the menu system to be in
   enum menuModes {                          
-      off,                                  // display off
-      menu,                                 // list menu
-      value,                                // enter a value
-      message                               // display a message
+      off,                                  // display is off
+      menu,                                 // a menu is active
+      value,                                // 'enter a value' is active
+      message,                              // displaying a message
+      blocking                              // a blocking procedure is in progress (see enter value)
   };  
-    
-  menuModes menuMode = off;                 // default mode at startup
-  String menuTitle = "";                    // title of active menu
+  menuModes menuMode = off;                 // default mode at startup is off
+  
+  String menuTitle = "";                    // the title of active mode
   int noOfMenuItems = 0;                    // number if menu items in the active menu
-  int selectedMenuItem = 0;                 // when a menu item is selected it is flagged here until actioned
-  int highlightedMenuItem = 0;              // which menu item is curently highlighted 
+  int selectedMenuItem = 0;                 // when a menu item is selected it is flagged here until actioned and cleared
+  int highlightedMenuItem = 0;              // which item is curently highlighted in the menu 
   String menuItems[maxMenuItems+1];         // store for the menu item titles 
-  uint32_t lastMenuActivity = 0;            // time the menu last had any activity (can be used for timeout)
+  uint32_t lastMenuActivity = 0;            // time the menu last saw any activity (used for timeout)
 
-// value entry
+// 'enter a value'
   int mValueEntered = 0;                    // store for number entered by value entry menu  
-  int mValueLow = 0;                        // lowest possible value
-  int mValueHigh = 0;                       // highest possible value
-  int mValueStep = 0;                       // step size
+  int mValueLow = 0;                        // lowest allowed value
+  int mValueHigh = 0;                       // highest allowed value
+  int mValueStep = 0;                       // step size when encoder is turned
 
 // rotary encoder  
-  volatile int encoder0Pos = 0;             // current value selected with rotary encoder (updated in interrupt routine)
+  volatile int encoder0Pos = 0;             // current value selected with rotary encoder (updated by interrupt routine)
   volatile bool encoderPrevA;               // used to debounced rotary encoder 
   volatile bool encoderPrevB;               // used to debounced rotary encoder 
   bool reButtonState = 1;                   // previous state of the button
-  int reButtonChanged = 0;                  // set to -1 when released and 1 when pressed
-  //uint32_t reButtonTimer = 0;               // time button state last changed
-  //int reButtonMinTime = 500;                // minimum milliseconds between allowed button status changes
+  int reButtonChanged = 0;                  // set to -1 when button is released and 1 when it is pressed
 
 // oled SSD1306 display connected to I2C
-  #define OLED_ADDR 0x3C                    // OLED i2c address
-  #define SCREEN_WIDTH 128                  // OLED display width, in pixels
-  #define SCREEN_HEIGHT 64                  // OLED display height, in pixels
-  #define OLED_RESET -1                     // Reset pin # (or -1 if sharing Arduino reset pin)
-  // #define OLED_RESET LED_BUILTIN           // I have seen this is required for esp8266?
   Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
@@ -132,7 +142,7 @@ void defaultMenu() {
 
 
 //                -----------------------------------------------
-  
+
 
 // demonstration menu 
 void demoMenu() {
@@ -144,28 +154,45 @@ void demoMenu() {
   menuItems[2] = "item2";
   menuItems[3] = "item3";
   menuItems[4] = "item4";
-  menuItems[5] = "item5";
-  menuItems[6] = "Message";
-  menuItems[7] = "Enter value";
+  menuItems[5] = "Enter value";
+  menuItems[6] = "Enter value-blocking";
+  menuItems[7] = "Message";
   menuItems[8] = "Menus Off";
 }  // demoMenu
 
-// actions for demo_menu selections are put in here
+
+// actions for menu selections are put in here
 void menuActions() {
+  
   // actions when an item is selected in "demo_menu"
-    if (menuTitle == "demo_menu") {
-      if (selectedMenuItem == 6) {         // demo_menu item 2 selected
-        if (serialDebug) Serial.println("demo_menu message selected");
-        displayMessage("Message", "Hello                This is a demo       message.");
-        //                         < line 1            >< line 2            >< line 3            >< line 4             >                                
-      }      
-      if (selectedMenuItem == 7) {         // enter a value
-        if (serialDebug) Serial.println("demo_menu enter value selected");
+  
+      if (selectedMenuItem == 5) {      // demonstrate usage of 'enter a value' (none blocking)
+        if (serialDebug) Serial.println("demo_menu none blocking enter value selected");
         value1();       // enter a value 
       }
-      else if (selectedMenuItem == 8) {    // menus off selected
+        
+    if (menuTitle == "demo_menu") {
+      if (selectedMenuItem == 6) {      // demonstrate usage of 'enter a value' (blocking) which is quick and easy but stops all other tasks until the value is entered
+        if (serialDebug) Serial.println("demo_menu blocking enter a value selected");
+          menuTitle = "blocking";       // title 
+          mValueLow = 0;                // minimum value allowed
+          mValueHigh = 100;             // maximum value allowed
+          mValueStep = 1;               // step size
+          mValueEntered = 50;           // starting value  
+          int _entered = serviceValue(1);
+          Serial.println("The value entered was " + String(_entered));   
+          defaultMenu();                                 
+      }     
+            
+      if (selectedMenuItem == 7) {         // demonstrate usage of message
+        if (serialDebug) Serial.println("demo_menu message selected");
+        displayMessage("Message", "Hello\nThis is a demo\nmessage.");    // 21 chars per line, "\n" = next line                              
+      }      
+      
+      else if (selectedMenuItem == 8) {    // turn oLED off
         resetMenu();    // turn menus off
       }
+      
       selectedMenuItem = 0;                // clear menu item selected flag   
     } 
     
@@ -176,7 +203,6 @@ void menuActions() {
 
 
 // demonstration enter a value
-
 void value1() {
   resetMenu();                  // clear any previous menu
   menuMode = value;             // enable value entry
@@ -189,12 +215,15 @@ void value1() {
 
 
 // actions for value entered put in here
+
 void menuValues() {
   
-  // action when value entered for "enter value"
+  // action when value entered for "enter value" (none blocking)
   if (menuTitle == "demo_value") {
-    if (serialDebug) Serial.println("Value entered for 'demo_value' was " + String(mValueEntered));
-    defaultMenu();         // use 'resetMenu()' here to turn menus off after value entered - or use 'defaultMenu()' to re-start the default menu
+    String tString = String(mValueEntered);
+    if (serialDebug) Serial.println("The value " + tString + " was entered");
+    displayMessage("ENTERED", "\nYou entered\nthe value\n    " + tString);
+    // alternatively use 'resetMenu()' here to turn menus off after value entered - or use 'defaultMenu()' to re-start the default menu
   }
   
 }
@@ -203,9 +232,9 @@ void menuValues() {
 //                -----------------------------------------------
 
 
-//  Note: you can also quickly create a menu using the commands:
-//    String tList[]={"main menu", "2", "3", "4", "5", "6"};
-//    createList("demo_list", 6, &tList[0]);
+//// Demonstraion of quickly creating a menu from a list
+//  String tList[]={"main menu", "2", "3", "4", "5", "6"};
+//  createList("demo_list", 6, &tList[0]);
 
 
 // -------------------------------------------------------------------------------------------------
@@ -226,20 +255,25 @@ void oledSetup() {
     pinMode(encoder0PinB, INPUT);
 
   // initialise the oled display
-    if (OLEDC == 0) Wire.begin();
+    // enable pin
+      if (OLEDE != 0) {
+        pinMode(OLEDE , OUTPUT);
+        digitalWrite(OLEDE, HIGH);
+      }
+    if (0 == OLEDC) Wire.begin();
     else Wire.begin(OLEDD, OLEDC);
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-      Serial.println(("\nError initialising the oled display"));
+      if (serialDebug) Serial.println(("\nError initialising the oled display"));
     }
 
   // Interrupt for reading the rotary encoder position
     encoder0Pos = 0;   
-    attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE); 
-
-
-  resetMenu();         // reset menu system
+    attachInterrupt(digitalPinToInterrupt(encoder0PinA), doEncoder, CHANGE);      
   
-  defaultMenu();       // start the default menu
+  //defaultMenu();       // start the default menu
+
+  // display greeting message - pressing button will start menu 
+    displayMessage("STARTED", "BasicWebserver\nsketch");      
     
 }
 
@@ -251,18 +285,7 @@ void oledSetup() {
 
 void oledLoop() {
 
-  // update rotary encoder button status
-    if (digitalRead(encoder0Press) != reButtonState) {       // if status has changed
-      delay(50);
-      if (digitalRead(encoder0Press) != reButtonState) {     // debounce
-        reButtonState = digitalRead(encoder0Press);
-        if (reButtonState == reButtonPressedState) {
-          reButtonChanged = 1;                               // buton has been pressed
-          if (menuMode == off) defaultMenu();                // start default menu if menus are off
-        }
-        else reButtonChanged = -1;                           // buton has been released
-      }
-    }  
+  reUpdateButton();       // update rotary encoder button status
 
   if (menuMode == off) return;      // if menu system is turned off do nothing more
 
@@ -280,7 +303,7 @@ void oledLoop() {
 
   // values
   if (menuMode == value) {
-    serviceValue();      // run value entry servicing routine
+    serviceValue(0);      // run value entry servicing routine
     if (reButtonChanged == 1) {   
       reButtonChanged = 0;
       menuValues();      // a value has been entered
@@ -292,6 +315,24 @@ void oledLoop() {
     if (reButtonChanged == 1) defaultMenu();       // clear message when button pressed
   }
   
+}
+
+
+
+// update rotary encoder button status
+void reUpdateButton() {
+  // update rotary encoder button status
+    if (digitalRead(encoder0Press) != reButtonState) {       // if status has changed
+      delay(50);
+      if (digitalRead(encoder0Press) != reButtonState) {     // debounce
+        reButtonState = digitalRead(encoder0Press);
+        if (reButtonState == reButtonPressedState) {
+          reButtonChanged = 1;                               // buton has been pressed
+          if (menuMode == off) defaultMenu();                // start default menu if menus are off
+        }
+        else reButtonChanged = -1;                           // buton has been released
+      }
+    }    
 }
 
 
@@ -356,50 +397,63 @@ void serviceMenu() {
 // ----------------------------------------------------------------
 //                        -service value entry
 // ----------------------------------------------------------------
+// if _blocking set to 1 then all other tasks are stopped until a value is entered
 
-void serviceValue() {
+int serviceValue(bool _blocking) {
 
-  const int _valueSpacing = 5;      // spacing tweak for the displayed value
+  const int _valueSpacing = 5;      // spacing tweak for the displayed value y position
+  if (_blocking) menuMode = blocking; 
   
-  // rotary encoder
-    if (encoder0Pos >= itemTrigger) {
-      encoder0Pos -= itemTrigger;
-      mValueEntered-= mValueStep;
-      lastMenuActivity = millis();   // log time 
-    }
-    if (encoder0Pos <= -itemTrigger) {
-      encoder0Pos += itemTrigger;
-      mValueEntered+= mValueStep;
-    }      
-    if (mValueEntered < mValueLow) {
-      mValueEntered = mValueLow;
-      lastMenuActivity = millis();   // log time 
-    }
-    if (mValueEntered > mValueHigh) {
-      mValueEntered = mValueHigh;
-      lastMenuActivity = millis();   // log time 
-    }
-
-    display.clearDisplay(); 
-    display.setTextColor(WHITE); 
+  do {
     
-    // title
-      display.setCursor(0, 0);
-      if (menuTitle.length() > MaxMenuTitleLength) display.setTextSize(1);
-      else display.setTextSize(2);          
-      display.println(menuTitle);
+    // rotary encoder
+      if (encoder0Pos >= itemTrigger) {
+        encoder0Pos -= itemTrigger;
+        mValueEntered-= mValueStep;
+        lastMenuActivity = millis();   // log time 
+      }
+      if (encoder0Pos <= -itemTrigger) {
+        encoder0Pos += itemTrigger;
+        mValueEntered+= mValueStep;
+        lastMenuActivity = millis();   // log time 
+      }      
+      if (mValueEntered < mValueLow) {
+        mValueEntered = mValueLow;
+        lastMenuActivity = millis();   // log time 
+      }
+      if (mValueEntered > mValueHigh) {
+        mValueEntered = mValueHigh;
+        lastMenuActivity = millis();   // log time 
+      }
+  
+      display.clearDisplay(); 
+      display.setTextColor(WHITE); 
       
-    // vale selected
-      display.setCursor(10, topLine + _valueSpacing);
-      display.setTextSize(3);  
-      display.println(mValueEntered);  
+      // title
+        display.setCursor(0, 0);
+        if (menuTitle.length() > MaxMenuTitleLength) display.setTextSize(1);
+        else display.setTextSize(2);          
+        display.println(menuTitle);
+        
+      // value selected
+        display.setCursor(10, topLine + _valueSpacing);
+        display.setTextSize(3);  
+        display.println(mValueEntered);  
+  
+      // range
+        display.setCursor(0, topLine + (lineSpace1 * (displayMaxLines-1)) );
+        display.setTextSize(1); 
+        display.println(String(mValueLow) + " to " + String(mValueHigh));
+  
+      display.display();  
 
-    // range
-      display.setCursor(0, topLine + (lineSpace1 * (displayMaxLines-1)) );
-      display.setTextSize(1); 
-      display.println(String(mValueLow) + " to " + String(mValueHigh));
+      reUpdateButton();        // check status of button
 
-    display.display();  
+  } while (_blocking && reButtonChanged != 1);        // if in blocking mode repeat until button is pressed
+
+  if (_blocking) menuMode = off;
+   
+  return mValueEntered;        // used when in blocking mode
           
 }
 
@@ -426,7 +480,9 @@ void createList(String _title, int _noOfElements, String *_list) {
 // ----------------------------------------------------------------
 //                         -message display 
 // ----------------------------------------------------------------
-
+// 21 characters per line, use "\n" for next line
+// assistant:  <     line 1        ><     line 2        ><     line 3        ><     line 4         >  
+ 
  void displayMessage(String _title, String _message) {
   resetMenu();
   menuMode = message;
