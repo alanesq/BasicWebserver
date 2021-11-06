@@ -153,7 +153,7 @@ void demoMenu() {
   menuItems[1] = "item1";       // set the menu items
   menuItems[2] = "item2";
   menuItems[3] = "item3";
-  menuItems[4] = "item4";
+  menuItems[4] = "Quick menu";
   menuItems[5] = "Enter value";
   menuItems[6] = "Enter value-blocking";
   menuItems[7] = "Message";
@@ -165,36 +165,61 @@ void demoMenu() {
 void menuActions() {
   
   // actions when an item is selected in "demo_menu"
-  
-      if (selectedMenuItem == 5) {      // demonstrate usage of 'enter a value' (none blocking)
-        if (serialDebug) Serial.println("demo_menu none blocking enter value selected");
-        value1();       // enter a value 
-      }
-        
-    if (menuTitle == "demo_menu") {
-      if (selectedMenuItem == 6) {      // demonstrate usage of 'enter a value' (blocking) which is quick and easy but stops all other tasks until the value is entered
-        if (serialDebug) Serial.println("demo_menu blocking enter a value selected");
-          menuTitle = "blocking";       // title 
-          mValueLow = 0;                // minimum value allowed
-          mValueHigh = 100;             // maximum value allowed
-          mValueStep = 1;               // step size
-          mValueEntered = 50;           // starting value  
-          int _entered = serviceValue(1);
-          Serial.println("The value entered was " + String(_entered));   
-          defaultMenu();                                 
-      }     
-            
-      if (selectedMenuItem == 7) {         // demonstrate usage of message
-        if (serialDebug) Serial.println("demo_menu message selected");
-        displayMessage("Message", "Hello\nThis is a demo\nmessage.");    // 21 chars per line, "\n" = next line                              
-      }      
-      
-      else if (selectedMenuItem == 8) {    // turn oLED off
-        resetMenu();    // turn menus off
-      }
-      
-      selectedMenuItem = 0;                // clear menu item selected flag   
-    } 
+  if (menuTitle == "demo_menu") {
+
+    // demonstrate quickly create a menu from a list
+    if (selectedMenuItem == 4) {      
+      if (serialDebug) Serial.println("demo_menu demo menu from list");
+      String tList[]={"main menu", "2", "3", "4", "5", "6"};
+      createList("demo_list", 6, &tList[0]);  
+    }
+
+    // demonstrate usage of 'enter a value' (none blocking)
+    if (selectedMenuItem == 5) {      
+      if (serialDebug) Serial.println("demo_menu none blocking enter value selected");
+      value1();       // enter a value 
+    }
+
+    // demonstrate usage of 'enter a value' (blocking) which is quick and easy but stops all other tasks until the value is entered
+    if (selectedMenuItem == 6) {      
+      if (serialDebug) Serial.println("demo_menu blocking enter a value selected");
+      menuTitle = "blocking";       // title 
+      mValueLow = 0;                // minimum value allowed
+      mValueHigh = 100;             // maximum value allowed
+      mValueStep = 1;               // step size
+      mValueEntered = 50;           // starting value  
+      int _entered = serviceValue(1);
+      Serial.println("The value entered was " + String(_entered));   
+      defaultMenu();                                 
+    }     
+
+    // demonstrate usage of message
+    if (selectedMenuItem == 7) {         
+      if (serialDebug) Serial.println("demo_menu message selected");
+      displayMessage("Message", "Hello\nThis is a demo\nmessage.");    // 21 chars per line, "\n" = next line                              
+    }      
+
+    // turn menu/oLED off
+    else if (selectedMenuItem == 8) {    
+      resetMenu();    // turn menus off
+    }
+    
+    selectedMenuItem = 0;                // clear menu item selected flag   
+  }
+
+
+  // actions when an item is selected in demo_list
+  if (menuTitle == "demo_list") {
+
+    // back to main menu
+    if (selectedMenuItem == 1) {         
+      if (serialDebug) Serial.println("demo_list back to main menu selected");
+      defaultMenu();
+    }
+
+    selectedMenuItem = 0;                // clear menu item selected flag   
+  }
+
     
 }  // menuActions
 
@@ -227,14 +252,6 @@ void menuValues() {
   }
   
 }
-
-
-//                -----------------------------------------------
-
-
-//// Demonstraion of quickly creating a menu from a list
-//  String tList[]={"main menu", "2", "3", "4", "5", "6"};
-//  createList("demo_list", 6, &tList[0]);
 
 
 // -------------------------------------------------------------------------------------------------
