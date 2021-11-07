@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *  
- *      OLED display simple none blocking menu System - i2c version SSD1306 - 06Nov21
+ *      OLED display simple none blocking menu System - i2c version SSD1306 - 07Nov21
  * 
  *      part of the BasicWebserver sketch
  *                                   
@@ -64,7 +64,7 @@
       #define OLED_RESET -1                     // Reset pin gpio (or -1 if sharing Arduino reset pin)
 
     // Misc
-      int menuTimeout = 20;                     // menu inactivity timeout (seconds)
+      int menuTimeout = 10;                     // menu inactivity timeout (seconds)
       const bool menuLargeText = 0;             // show larger text when possible (if struggling to read the small text)
       const int maxmenuItems = 12;              // max number of items used in any of the menus (keep as low as possible to save memory)
       const int itemTrigger = 1;                // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
@@ -158,8 +158,8 @@ void demoMenu() {
   oledMenu.menuTitle = "demo_menu";     // menus title (used to identify it) 
   oledMenu.menuItems[1] = "item1";      // set the menu items
   oledMenu.menuItems[2] = "item2";
-  oledMenu.menuItems[3] = "item3";
-  oledMenu.menuItems[4] = "Quick menu";
+  oledMenu.menuItems[3] = "Quick menu";
+  oledMenu.menuItems[4] = "On or Off";
   oledMenu.menuItems[5] = "Enter value";
   oledMenu.menuItems[6] = "Enter value-blocking";
   oledMenu.menuItems[7] = "Message";
@@ -174,11 +174,16 @@ void menuActions() {
   if (oledMenu.menuTitle == "demo_menu") {
 
     // demonstrate quickly create a menu from a list
-    if (oledMenu.selectedMenuItem == 4) {      
+    if (oledMenu.selectedMenuItem == 3) {      
       if (serialDebug) Serial.println("demo_menu: create menu from a list");
       String tList[]={"main menu", "2", "3", "4", "5", "6"};
       createList("demo_list", 6, &tList[0]);  
-    }
+    }    
+
+    // demonstrate selecting between 2 options only
+    if (oledMenu.selectedMenuItem == 4) {      
+      menuMode = value; oledMenu.menuTitle = "on or off"; oledMenu.mValueLow = 0; oledMenu.mValueHigh = 1; oledMenu.mValueStep = 1; oledMenu.mValueEntered = 0;  // set parameters        
+    }    
 
     // demonstrate usage of 'enter a value' (none blocking)
     if (oledMenu.selectedMenuItem == 5) {      
@@ -189,8 +194,14 @@ void menuActions() {
     // demonstrate usage of 'enter a value' (blocking) which is quick and easy but stops all other tasks until the value is entered
     if (oledMenu.selectedMenuItem == 6) {      
       if (serialDebug) Serial.println("demo_menu: blocking enter a value");
-      oledMenu.menuTitle = "blocking"; oledMenu.mValueLow = 0; oledMenu.mValueHigh = 100; oledMenu.mValueStep = 1; oledMenu.mValueEntered = 50;  // set parameters  
-      int tEntered = serviceValue(1);                                                               // request value
+      // set perameters
+        menuMode = value; 
+        oledMenu.menuTitle = "blocking"; 
+        oledMenu.mValueLow = 0; 
+        oledMenu.mValueHigh = 50; 
+        oledMenu.mValueStep = 1; 
+        oledMenu.mValueEntered = 5;  
+      int tEntered = serviceValue(1);      // request value
       Serial.println("The value entered was " + String(tEntered));   
       defaultMenu();                                 
     }     
@@ -250,6 +261,12 @@ void menuValues() {
     if (serialDebug) Serial.println("demo_value: The value entered was " + tString);
     displayMessage("ENTERED", "\nYou entered\nthe value\n    " + tString);
     // alternatively use 'resetMenu()' here to turn menus off after value entered - or use 'defaultMenu()' to re-start the default menu
+  }
+
+  // action for "on or off"
+  if (oledMenu.menuTitle == "on or off") {
+    if (serialDebug) Serial.println("demo_menu: on off selection was " + String(oledMenu.mValueEntered));
+    defaultMenu();
   }
   
 }
@@ -340,18 +357,17 @@ void oledLoop() {
 
 // update rotary encoder current button status
 void reUpdateButton() {
-  // update rotary encoder button status
     bool tReading = digitalRead(encoder0Press);
-    if (tReading != rotaryEncoder.reButtonState) {      // if status has changed
-      delay(50);      // debounce by checking again
+    if (tReading != rotaryEncoder.reButtonState) {     // if it has changed since last check do a basic debounce
+      delay(50);
       tReading = digitalRead(encoder0Press);
       if (tReading != rotaryEncoder.reButtonState) {    
-        rotaryEncoder.reButtonState = tReading;
-        if (rotaryEncoder.reButtonState == rotaryEncoder.reButtonPressedState) {       // if the button is pressed
-          rotaryEncoder.reButtonChanged = 1;                
-          if (menuMode == off) defaultMenu();            // start default menu if menus are off
+        rotaryEncoder.reButtonState = tReading;        // update the current status flag
+        if (rotaryEncoder.reButtonState == rotaryEncoder.reButtonPressedState) {   
+          rotaryEncoder.reButtonChanged = 1;           // flag the button has been pressed        
+          if (menuMode == off) defaultMenu();          // if the display is off start the default menu
         }
-        else rotaryEncoder.reButtonChanged = -1;         // buton has been released
+        else rotaryEncoder.reButtonChanged = -1;       // flag the button has been released
       }
     }    
 }
