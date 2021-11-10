@@ -11,6 +11,8 @@ For a more advanced option for showing updating info see: https://github.com/ala
 
 It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system, GSM board support and OTA updating.
 
+Note: It does not work with the latest esp32 Arduino addin (i.e. v2) as ESP_Wifimanager at least for me just gets an ip address of 255.255.255.255 for some reason
+
 <table><tr>
   <td><img src="/Images/Screenshot1.png" /></td>
   <td><img src="/Images/Screenshot2.png" /></td>
