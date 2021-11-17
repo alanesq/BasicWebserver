@@ -57,15 +57,17 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "18Oct21";                      // version of this sketch
+  const char* sversion = "17Nov21";                      // version of this sketch
 
   const bool serialDebug = 1;                            // provide debug info on serial port
+
+  #define EEPROM_STORE 0                                 // if some settings are to be stored in eeprom
 
   #define ENABLE_OLED 0                                  // Enable OLED display support
 
   #define ENABLE_GSM 0                                   // Enable GSM board support (not yet fully working - oct21)
 
-  #define ENABLE_EMAIL 1                                 // Enable E-mail support
+  #define ENABLE_EMAIL 0                                 // Enable E-mail support
 
   #define ENABLE_NEOPIXEL 0                              // Enable Neopixel support
   
@@ -81,9 +83,9 @@
 
   const uint16_t ServerPort = 80;                        // ip port to serve web pages on
 
-  const byte onboardLED = 2;                             // indicator LED pin - 2 or 16 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32
+  const byte onboardLED = 22;                            // indicator LED pin - 2 or 16 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32, 22 on esp32 lolin lite
 
-  const byte onboardButton = 0;                          // onboard button (FLASH)
+  const byte onboardButton = 0;                          // onboard button gpio (FLASH)
 
   const bool ledBlinkEnabled = 1;                        // enable blinking status LED
   const uint16_t ledBlinkRate = 1500;                    // Speed to blink the status LED (milliseconds) - also perform some system tasks
@@ -94,27 +96,32 @@
 // ---------------------------------------------------------------
 
 
-// forward declarations
-  void log_system_message(String);  
+// forward declarations (so that the functions can be out of order of execution)
+  void log_system_message(String);   // in standard.h
      
 
 // ---------------------------------------------------------------
 
-int radioButton = 0;                    // Temporary variable used in demo radio buttons
 
-//#define ARRAYSIZE(x) (sizeof(x)/sizeof(x[0]))
+//#define ARRAYSIZE(x) (sizeof(x)/sizeof(x[0]))      // calculate the size of an array
 
-bool OTAEnabled = 0;                    // flag if OTA has been enabled (via supply of password)
-bool GSMconnected = 0;                  // flag if the gsm module is connected ok
-bool wifiok = 0;                        // flag if wifi connection is ok
+int radioButton = 0;                    // Temporary variable used in demo radio buttons on root web page
+
+bool OTAEnabled = 0;                    // flag to show if OTA has been enabled (via supply of password in http://x.x.x.x/ota)
+bool GSMconnected = 0;                  // flag toshow if the gsm module is connected ok (in gsm.h)
+bool wifiok = 0;                        // flag to show if wifi connection is ok
  
 #include "wifi.h"                       // Load the Wifi / NTP stuff
 
 #include "standard.h"                   // Some standard procedures
 
-Led statusLed1(onboardLED, LOW);        // set up onboard LED as led1 (LOW = on) - standard.h
+Led statusLed1(onboardLED, LOW);        // set up onboard LED as led1 (LOW = on) - see standard.h
 
-Button button1(onboardButton, HIGH);    // set up the onboard button (Flash button) - standard.h
+Button button1(onboardButton, HIGH);    // set up the onboard button (Flash button) - see standard.h
+
+#if EEPROM_STORE
+  #include <EEPROM.h>                     // for storing settings in eeprom
+#endif
 
 #if ENABLE_OTA
   #include "ota.h"                      // Over The Air updates (OTA)
@@ -125,7 +132,7 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
 #endif
 
 #if ENABLE_NEOPIXEL
-  #include "neopixel.h"                 // Neopixels used
+  #include "neopixel.h"                 // Neopixels 
 #endif
 
 #if ENABLE_OLED
@@ -146,11 +153,11 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
 
 void setup() {
     
-  if (serialDebug) {
-    Serial.begin(serialSpeed); while (!Serial); delay(200);       // start serial comms                                   // serial port
+  if (serialDebug) {       // if serialdebug info. is enabled
+    Serial.begin(serialSpeed); while (!Serial); delay(50);       // start serial comms  
     delay(200);
 
-    Serial.println("\n\n\n");                                    // line feeds
+    Serial.println("\n\n\n");                                    // some line feeds
     Serial.println("-----------------------------------");
     Serial.printf("Starting - %s - %s \n", stitle, sversion);
     Serial.println("-----------------------------------");
@@ -170,22 +177,27 @@ void setup() {
     neopixelSetup(); 
   #endif  
 
-  #if ENABLE_OLED
-    oledSetup();         // initialise the oled display
-  #endif
-
   #if ENABLE_GSM
     setupGSM();          // initialise GSM board
   #endif
  
-  // if (serialDebug) Serial.setDebugOutput(true);         // enable extra diagnostic info  
+  // if (serialDebug) Serial.setDebugOutput(true);         // to enable extra diagnostic info  
    
-  statusLed1.on();                                         // turn status led on until wifi has connected
+  statusLed1.on();                                         // turn status led on until wifi has connected (see standard.h)
 
-  // configure the onboard input button (nodemcu onboard, low when pressed)
-    // pinMode(onboardButton, INPUT); 
+  startWifiManager();                                      // Connect to wifi (see wifi.h)
 
-  startWifiManager();                                      // Connect to wifi (procedure is in wifi.h)
+  #if ENABLE_OLED
+    oledSetup();         // initialise the oled display - see oled.h
+    // display IP address on oled
+      IPAddress cip = WiFi.localIP();
+      String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);    
+      displayMessage("Started", "IP=" + clientIP);
+  #endif  
+
+  #if EEPROM_STORE
+    settingsEeprom(0);       // read stored settings from eeprom in to variables
+  #endif
   
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
@@ -198,10 +210,10 @@ void setup() {
       
   // set up web page request handling
     server.on(HomeLink, handleRoot);         // root page
-    server.on("/data", handleData);          // This displays information which updates every few seconds (used by root web page)
+    server.on("/data", handleData);          // displays information which updates every few seconds (used by root web page)
     server.on("/ping", handlePing);          // ping requested
     server.on("/log", handleLogpage);        // system log
-    server.on("/test", handleTest);          // testing page
+    server.on("/test", handleTest);          // testing page 
     server.on("/reboot", handleReboot);      // reboot the esp
     server.onNotFound(handleNotFound);       // invalid page requested
     #if ENABLE_OTA
@@ -212,7 +224,7 @@ void setup() {
     if (serialDebug) Serial.println("Starting web server");
     server.begin();
     
-  // Stop wifi going to sleep (if enabled it causes wifi to drop out randomly especially on esp8266 boards)
+  // Stop wifi going to sleep (if enabled it can cause wifi to drop out randomly especially on esp8266 boards)
     #if defined ESP8266
       WiFi.setSleepMode(WIFI_NONE_SLEEP);     
     #elif defined ESP32
@@ -225,6 +237,7 @@ void setup() {
 
 }
 
+
 // ----------------------------------------------------------------
 //   -LOOP     LOOP     LOOP     LOOP     LOOP     LOOP     LOOP
 // ----------------------------------------------------------------
@@ -234,11 +247,13 @@ void loop(void){
     #if defined(ESP8266)
         yield();                      // allow esp8266 to carry out wifi tasks (may restart randomly without this)
     #endif
-    
     server.handleClient();            // service any web page requests 
 
+//    // check if the onboard button has been pressed
+//      if button1.beenPressed() ......
+
     #if ENABLE_NEOPIXEL 
-      neoTest();                      // run the neopixel testing code (in neopixel.h)
+      neoLoop();                      // handle neopixel updates
     #endif  
   
     #if ENABLE_OLED
@@ -253,7 +268,7 @@ void loop(void){
         EMAILloop();                  // handle emails
     #endif
 
-
+    
 
 
            // YOUR CODE HERE !
@@ -261,19 +276,18 @@ void loop(void){
 
 
 
-    // Periodically change the LED status to indicate all well
-    //    explanation of timing here: https://www.baldengineer.com/arduino-millis-plus-addition-does-not-add-up.html
-      static repeatTimer ledTimer;                          // set up a repeat timer
-      if (ledTimer.check(ledBlinkRate)) {                   //  repeat at set interval (ms)
-          bool allOK = 1;                                   // if all checks leave this as 1 then the all ok LED is flashed
-          if (!WIFIcheck()) allOK = 0;                      // if wifi connection is ok
-          if (timeStatus() != timeSet) allOK = 0;           // if NTP time is updating ok
+    // Periodically change the LED status to indicate all is well
+      static repeatTimer ledTimer;                          // set up a repeat timer (see standard.h)
+      if (ledTimer.check(ledBlinkRate)) {                   // repeat at set interval (ms)
+          bool allOK = 1;                                   // if all checks leave this as 1 then the LED is flashed
+          if (!WIFIcheck()) allOK = 0;                      // if wifi connection is not ok
+          if (timeStatus() != timeSet) allOK = 0;           // if NTP time is not updating ok
           #if ENABLE_GSM
-            if (!GSMconnected) allOK = 0;                   // if GSM board is responding ok
+            if (!GSMconnected) allOK = 0;                   // if GSM board is not responding ok
           #endif
           time_t t=now();                                   // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
           // blink status led
-            if (ledBlinkEnabled && allOK) statusLed1.flip(); // invert the LED status if all OK
+            if (ledBlinkEnabled && allOK) statusLed1.flip(); // invert the LED status if all OK (see standard.h)
             else statusLed1.off();      
       }
 
@@ -303,19 +317,8 @@ void handleRoot() {
     clientIP = decodeIP(clientIP);               // check for known IP addresses
     //log_system_message("Root page requested from: " + clientIP);  
 
-  // action any button presses etc.
 
-//  #if ENABLE_OTA
-//  // enable OTA if password supplied in url parameters   (?pass=xxx)
-//    if (server.hasArg("pwd")) {
-//        String Tvalue = server.arg("pwd");   // read value
-//          if (Tvalue == OTAPassword) {
-//            otaSetup();    // Over The Air updates (OTA)
-//            log_system_message("OTA enabled");
-//            OTAEnabled = 1;
-//          }
-//    }
-//  #endif
+  // action any button presses etc.
 
     // if demo radio button "RADIO1" was selected 
       if (server.hasArg("RADIO1")) {
@@ -386,15 +389,14 @@ void handleRoot() {
       webfooter(client);                                                     // html page footer
       delay(3);        
       client.stop();
-
 }
 
   
 // ----------------------------------------------------------------
 //     -data web page requested     i.e. http://x.x.x.x/data
 // ----------------------------------------------------------------
-//
-//   This shows information on the root web page which refreshes every few seconds
+// This shows information on the root web page in an iframe which refreshes every few seconds
+// not the ideal way to do it but makes the code very simple
 
 void handleData(){
 
@@ -451,6 +453,47 @@ void handlePing(){
   server.send(404, "text/plain", message);   // send reply as plain text
   
 }
+
+
+// ----------------------------------------------------------------
+//                    -settings stored in eeprom
+// ----------------------------------------------------------------
+// @param   eDirection   1=write, 0=read
+// see:  https://www.arduino.cc/en/Reference/EEPROM
+// To store variables other than byte use EEPROM.put(),  increment counter with EEPROM.length()
+
+#if EEPROM_STORE
+void settingsEeprom(bool eDirection) {
+
+    const int dataRequired = 30;   // total size of eeprom space required (bytes)
+
+    uint32_t demoInt = 42;         // 4 byte variable to be stored in eeprom as an example of how (can be removed)
+
+    int currentEPos = 0;     // current position in eeprom
+    byte tVal;               // data from eeprom
+    int tSize;               // size of stored data
+
+    EEPROM.begin(dataRequired); 
+
+    if (eDirection == 0) {
+      
+      // read settings from Eeprom
+      Serial.println("Reading settings from eeprom");
+      
+      EEPROM.get(currentEPos, demoInt);             // read data
+      if (demoInt < 1 || demoInt > 99) demoInt = 1; // validate 
+      currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
+        
+    } else {
+      
+      EEPROM.put(currentEPos, demoInt);             // write demoInt to Eeprom
+      currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
+
+      EEPROM.commit();                              // write the data out to eeprom
+    }
+    
+}
+#endif
 
 
 // ----------------------------------------------------------------

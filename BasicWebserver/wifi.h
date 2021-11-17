@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections using WifiManager - 13Oct21
+ *      Wifi / NTP Connections using WifiManager - 10Nov21
  *      
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *             
@@ -22,8 +22,8 @@
 
     
     // Configuration Portal (Wifimanager)
-      String AP_SSID = "ESPPortal";
-      String AP_PASS = "12345678";    
+      const char AP_SSID[] = "ESPPortal";
+      const char AP_PASS[] = "12345678";    
 
 
 //     mDNS name
@@ -58,7 +58,7 @@
     WebServer server(ServerPort);
     //#include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS      
   #elif defined ESP8266
-    #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+    #include <ESP8266WiFi.h>              // https://github.com/esp8266/Arduino
     //needed for library
     #include <DNSServer.h>
     #include <ESP8266WebServer.h>
@@ -66,12 +66,11 @@
     ESP8266WebServer server(ServerPort);
     //#include <ESP8266mDNS.h>
   #else
-      #error "This sketch only works with the ESP8266 or ESP32"
+      #error "This sketch only works with ESP8266 or ESP32"
   #endif
  
-  #include <ESP_WiFiManager.h>              //https://github.com/khoih-prog/ESP_WiFiManager   
-
-
+  #include <ESP_WiFiManager.h>            // https://github.com/khoih-prog/ESP_WiFiManager
+  
 // Time from NTP server
 //  from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
   #include <TimeLib.h>
@@ -93,38 +92,39 @@
 
 void startWifiManager() {
 
-  // Connect to Wifi using WifiManager
-    ESP_WiFiManager ESP_wifiManager("AutoConnectAP");
+  // Start WifiManager
+    ESP_WiFiManager ESP_wifiManager(AP_SSID);
     ESP_wifiManager.setConfigPortalTimeout(120);
-    ESP_wifiManager.setDebugOutput(true);   
+    #define _WIFIMGR_LOGLEVEL_    3        // logging - Use from 0 to 4. Higher number, more debugging messages and memory usage.
+    if (serialDebug) ESP_wifiManager.setDebugOutput(true);   
 
-  // get stored wifi settings
-    String Router_SSID = ESP_wifiManager.WiFi_SSID();    
-    String Router_Pass = ESP_wifiManager.WiFi_Pass();
-    if (Router_SSID == "") if (serialDebug) Serial.println("There are no wifi settings stored");
+  if (ESP_wifiManager.WiFi_SSID() == "") if (serialDebug) Serial.println("No wifi settings found");
 
   // try connecting to wifi
-    if (serialDebug) Serial.println("Connecting to wifi using WifiManager");
-    WiFi.begin(Router_SSID.c_str(), Router_Pass.c_str());
+    if (serialDebug) Serial.println("Connecting to wifi using: " + String(ESP_WIFIMANAGER_VERSION));
+    WiFi.begin(ESP_wifiManager.WiFi_SSID().c_str(), ESP_wifiManager.WiFi_Pass().c_str());
 
-  // if unable to connect to wifi start config portal  
+  // if unable to connect to wifi start a config portal  
     if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-      if (serialDebug) Serial.println("Unable to connect to WiFi - starting Wifimanager config portal");
-      if ( !ESP_wifiManager.startConfigPortal(AP_SSID.c_str(), AP_PASS.c_str()) ) {
-        if (serialDebug) Serial.println("Not connected to WiFi - rebooting");
-        delay(1000);
-        ESP.restart();  
-        delay(5000);           // restart will fail without this delay
-      }
+      if (serialDebug) Serial.println("Unable to connect to WiFi so starting Wifimanager config portal");
+      ESP_wifiManager.startConfigPortal(AP_SSID, AP_PASS);
     }    
 
-  // finished connecting to wifi (it should be connected at this point)
+  // wifi should now be connected
     if (WiFi.status() == WL_CONNECTED) {
-      if (serialDebug) Serial.print("connected to wifi. Local IP: ");
-      if (serialDebug) Serial.println(WiFi.localIP());
+      if (serialDebug) {
+        Serial.print("Connected to wifi. Local IP: ");
+        Serial.println(WiFi.localIP());
+      }
       wifiok = 1;  
     } else {
-      if (serialDebug) Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+      if (serialDebug) {
+        Serial.print("Wifi connection failed so rebooting: ");
+        Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
+      }
+      delay(1000);
+      ESP.restart();  
+      delay(5000);           // restart will fail without this delay      
     }  
           
 //  // Set up mDNS responder:
@@ -171,54 +171,45 @@ String currentTime(){
 //-----------------------------------------------------------------------------
 //                           -British Summer Time check
 //-----------------------------------------------------------------------------
-// returns true if it is British Summer time
+// @return  true if it is British Summer time
 // code from https://my-small-projects.blogspot.com/2015/05/arduino-checking-for-british-summer-time.html
 
-boolean IsBST()
-{
+bool IsBST() {
     int imonth = month();
     int iday = day();
     int hr = hour();
     
     //January, february, and november are out.
     if (imonth < 3 || imonth > 10) { return false; }
+    
     //April to September are in
     if (imonth > 3 && imonth < 10) { return true; }
 
     // find last sun in mar and oct - quickest way I've found to do it
     // last sunday of march
     int lastMarSunday =  (31 - (5* year() /4 + 4) % 7);
+    
     //last sunday of october
     int lastOctSunday = (31 - (5 * year() /4 + 1) % 7);
         
     //In march, we are BST if is the last sunday in the month
     if (imonth == 3) { 
-      
-      if( iday > lastMarSunday)
-        return true;
-      if( iday < lastMarSunday)
-        return false;
-      
-      if (hr < 1)
-        return false;
-              
+      if( iday > lastMarSunday) return true;
+      if( iday < lastMarSunday) return false;
+      if (hr < 1) return false;       
       return true; 
-  
     }
+    
     //In October we must be before the last sunday to be bst.
     //That means the previous sunday must be before the 1st.
     if (imonth == 10) { 
-
-      if( iday < lastOctSunday)
-        return true;
-      if( iday > lastOctSunday)
-        return false;  
-      
-      if (hr >= 1)
-        return false;
-        
+      if( iday < lastOctSunday) return true;
+      if( iday > lastOctSunday) return false;  
+      if (hr >= 1) return false;
       return true;  
     }
+
+    return true;   // this is here just to stop compiler getting upset ;-)
 
 }  // IsBST
 
@@ -324,9 +315,13 @@ time_t getNTPTime() {
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-// parameters: ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
-//     return: web page reply as a string
-//      Usage: requestWebPage("192.168.1.166", "/log", 80, 600, "");
+//   @param    ip           ip address
+//   @param    page         web page to request
+//   @param    port         ip port to use (usually 80)
+//   @param    maxChars     maximum number of chars to receive
+//   @param    cuttoffText  ignore all in reply before this text 
+//   @return   the reply as a string
+//   Example usage: requestWebPage("192.168.1.166", "/log", 80, 600, "");
 
 String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
 

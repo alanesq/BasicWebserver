@@ -1,29 +1,20 @@
 /**************************************************************************************************
  *
- *      Standard procedures - 18Oct21
+ *      Standard procedures - 25Oct21
  *      
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *      
+ *      Includes: log_system_message, webheader, webfooter, handleLogpage, handleReboot, WIFIcheck & decodeIP
+ *                classes: Led, Button & repeatTimer.
  *             
  **************************************************************************************************/
-
-
-// forward declarations
-  void log_system_message(String);
-  void webheader();
-  void webfooter();
-  void handleLogpage();
-  void handleNotFound();
-  void handleReboot();
-  bool WIFIcheck();
-  String decodeIP(String);
 
 
 // ----------------------------------------------------------------
 //                              -Startup
 // ----------------------------------------------------------------  
 
-// html text colour codes (obsolete html now and should use CSS)
+// html text colour codes (obsolete html now and should really use CSS)
   const char colRed[] = "<font color='#FF0000'>";           // red text
   const char colGreen[] = "<font color='#006F00'>";         // green text
   const char colBlue[] = "<font color='#0000FF'>";          // blue text
@@ -34,39 +25,6 @@
   int system_message_pointer = 0;             // pointer for current system message position
   String system_message[LogNumber + 1];       // system log message store  (suspect serial port issues caused if not +1 ???)
   
-
-// ----------------------------------------------------------------
-//                            -repeatTimer
-// ---------------------------------------------------------------- 
-// repeat an operation periodically 
-// example to repeat every 2 seconds:   static repeatTimer timer1;             // set up a timer     
-//                                      if (timer1.check(2000)) {do stuff};    // repeat every 2 seconds
-
-class repeatTimer {
-
-  private:
-    uint32_t  rLastTime;                                              // store last time event triggered
-
-  public:
-    repeatTimer() {
-      reset();
-    }
-
-    bool check(uint32_t r_interval, bool r_reset=1) {                 // check if provided time has passed 
-      if ((unsigned long)(millis() - rLastTime) >= r_interval ) {
-        if (r_reset) reset();
-        return 1;
-      } else {
-        return 0;
-      }
-    }
-
-    void reset() {                                                    // reset the timer
-      rLastTime = millis();
-    }
-
-};
-
 
 // ----------------------------------------------------------------
 //                    -decode IP addresses
@@ -105,7 +63,7 @@ void log_system_message(String smes) {
   // add the new message to log
     system_message[system_message_pointer] = currentTime() + " - " + smes;
   
-  // also send message to serial port
+  // also send the message to serial 
     if (serialDebug) Serial.println("Log:" + system_message[system_message_pointer]);
 }
 
@@ -114,10 +72,11 @@ void log_system_message(String smes) {
 //                         -header (html) 
 // ----------------------------------------------------------------
 // HTML at the top of each web page
-//    additional style settings can be included and auto page refresh rate
+// @param   client    the http client
+// @param   adnlStyle additional style settings to included 
+// @param   refresh   enable page auto refreshing
 
-
-void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
+void webheader(WiFiClient &client, String adnlStyle = " ", int refresh = 0) {
 
   // html header
     client.write("HTTP/1.1 200 OK\r\n");
@@ -130,7 +89,7 @@ void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
     client.write("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
 
   // page refresh
-    if (refresh > 0) client.print( "<meta http-equiv='refresh' content='" + String(refresh) + "'>\n");   
+    if (refresh > 0) client.printf("<meta http-equiv='refresh' content='%s'>\n", refresh);   
 
   // page title
     client.printf("<title> %s </title>\n", stitle); 
@@ -141,13 +100,13 @@ void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
     client.write("li {float: left;}\n");
     client.write("li a {display: inline-block; color: white; text-align: center; padding: 30px 20px; text-decoration: none;}\n");
     client.write("li a:hover { background-color: rgb(100, 0, 0);}\n");
-    client.print(style);                                // insert aditional style if supplied 
+    client.print(adnlStyle);  
     client.write("</style>\n");
     
   client.write("</head>\n");
   client.write("<body style='color: rgb(0, 0, 0); background-color: yellow; text-align: center;'>\n");
 
-  // menu
+  // top of screen menu
     client.write("<ul>\n");
     client.printf("<li><a href='%s'>Home</a></li>\n", HomeLink);                                          // home page url
     client.print("<li><a href='/log'>Log</a></li>\n");                                                    // log menu button 
@@ -160,6 +119,7 @@ void webheader(WiFiClient &client, char style[] = " ", int refresh = 0) {
 //                             -footer (html)
 // ----------------------------------------------------------------
 // HTML at the end of each web page
+// @param   client    http client
 
 void webfooter(WiFiClient &client) {
 
@@ -274,9 +234,7 @@ void handleNotFound() {
 // ----------------------------------------------------------------
 //   -reboot web page requested        i.e. http://x.x.x.x/reboot  
 // ----------------------------------------------------------------
-//
-//     note: this fails if the esp has just been reflashed and not restarted
-
+// note: this can fail if the esp has just been reflashed and not restarted
 
 void handleReboot(){
 
@@ -286,27 +244,27 @@ void handleReboot(){
       // rebooting
         delay(500);          // give time to send the above html
         ESP.restart();   
-        delay(5000);         // restart fails without this line
+        delay(5000);         // restart fails without this delay
 
 }
 
 
 // --------------------------------------------------------------------------------------
-//                                -wifi connection check
+//                                 -wifi connection check
 // --------------------------------------------------------------------------------------
 
 bool WIFIcheck() {
   
     if (WiFi.status() != WL_CONNECTED) {
       if ( wifiok == 1) {
-        log_system_message("Wifi connection lost");          // log system message if wifi was ok but now down
-        wifiok = 0;                                          // flag problem with wifi
+        log_system_message("Wifi connection lost");   
+        wifiok = 0;     
       }
     } else { 
       // wifi is ok
       if ( wifiok == 0) {
-        log_system_message("Wifi connection is back");       // log system message if wifi was down but now back
-        wifiok = 1;                                          // flag wifi is now ok
+        log_system_message("Wifi connection is back");
+        wifiok = 1;  
       }
     }
 
@@ -316,110 +274,159 @@ bool WIFIcheck() {
 
 
 // --------------------------------------------------------------------------------------
-//                                    -LED control code
+//                                       -LED control
 // --------------------------------------------------------------------------------------
-// Supply gpio pin, if LED ON when pin is high or low
-// useage:      Led led1(LED_1_GPIO, HIGH);       led1.on();
+// @param  gpio pin, if LED ON when pin is high or low
+// useage:      Led led1(LED_1_GPIO, HIGH);       
+//              led1.on();
 
 class Led {
   
   private:
-    byte pin;           // gpio pin
-    bool onState;       // if on when pin is high or low
+    byte _gpioPin;                                     // gpio pin of the LED
+    bool _onState;                                     // logic state when LED is on
     
   public:
-    Led(byte l_pin, bool l_onState = HIGH) {
-      this->pin = l_pin;
-      this->onState = l_onState;
-      init();
-    }
-
-    void init() {
-      pinMode(pin, OUTPUT);
+    Led(byte gpioPin, bool onState=HIGH) {
+      this->_gpioPin = gpioPin;
+      this->_onState = onState;
+      pinMode(_gpioPin, OUTPUT);
       off();
     }
 
     void on() {
-      digitalWrite(pin, onState);
+      digitalWrite(_gpioPin, _onState);
     }
 
     void off() {
-      digitalWrite(pin, !onState);
+      digitalWrite(_gpioPin, !_onState);
     }
 
     void flip() {
-      digitalWrite(pin, !digitalRead(pin));   // flip the leds status
+      digitalWrite(_gpioPin, !digitalRead(_gpioPin));   // flip the led status
     }
 
-    bool status() {                           // returns HIGH if LED is on
-      bool s_state = digitalRead(pin);
-      if (onState == HIGH) return s_state;
-      else return !s_state;
+    bool status() {                                     // returns 1 if LED is on
+      bool sState = digitalRead(_gpioPin);
+      if (_onState == HIGH) return sState;
+      else return !sState;
     }
 
-    void flash(int f_reps=1, int f_ledDelay=350) {
-      bool f_tempStat = digitalRead(pin);
-      if (f_tempStat == onState) {            // if led is already on
+    void flash(int fLedDelay=350, int fReps=1) {
+      if (fLedDelay < 0 || fLedDelay > 20000) fLedDelay=300;   // capture invalid delay
+      bool fTempStat = digitalRead(_gpioPin);
+      if (fTempStat == _onState) {                      // if led is already on
         off();
-        delay(f_ledDelay);
+        delay(fLedDelay);
       }
-      for (int i=0; i<f_reps; i++) {
+      for (int i=0; i<fReps; i++) {
         on();
-        delay(f_ledDelay);
+        delay(fLedDelay);
         off();
-        delay(f_ledDelay);
+        delay(fLedDelay);
       }
-      if (f_tempStat == onState) on();          // return led status
+      if (fTempStat == _onState) on();                  // return led status if it was on
     }
 }; 
 
 
 // --------------------------------------------------------------------------------------
-//                                   -button control code
+//                                    -button control
 // --------------------------------------------------------------------------------------
-// Supply gpio pin, normal state (i.e. high or low when not pressed)
-// useage:      Button button1(GPIO_PIN, HIGH);     if (button1.isPressed()) {};
-// Note: Because of the debouncing used it needs to be polled regularly as a single check will be ignored
+// @param  gpio pin, normal state (i.e. high or low when not pressed)
+// example useage:      Button button1(12, HIGH);   
+//                      if (button1.beenPressed()) {do stuff};
+// Note: Because of the basic debouncing used it needs to be polled regularly as a single check will just be ignored
 
 class Button {
   
   private:
-    byte pin;                                 // gpio pin
-    bool normalState;                         // pin state when button not pressed
-    bool state;                               // current status of button
-    unsigned long debounceDelay = 40;         // delay time for debouncing (ms)
-    
+    int      _debounceDelay = 40;              // default debounce setting (ms)
+    uint32_t _timer;                           // timer used for debouncing
+    bool     _rawState;                        // raw state of the button
+    byte     _gpiopin;                         // gpio pin of the button
+    bool     _normalState;                     // gpio state when button not pressed
+    bool     _debouncedState;                  // debounced state of button
+    bool     _beenReleased = HIGH;             // flag to show the button has been released
+        
   public:
-    Button(byte b_pin, bool b_normalState = LOW) {
-      this->pin = b_pin;
-      this->normalState = b_normalState;
-      init();
+    Button(byte bPin, bool bNormalState = LOW) {
+      this->_gpiopin = bPin;
+      this->_normalState = bNormalState;
+      pinMode(_gpiopin, INPUT);
+      _debouncedState = digitalRead(_gpiopin);
+      _timer = millis();
     }
 
-    void init() {
-      pinMode(pin, INPUT);
-      state = digitalRead(pin);               // store current state of button
-    }
-
-    void update() {
-      bool u_newReading = digitalRead(pin);
-      if (u_newReading != state) {            // if the button status has changed
-        delay(debounceDelay);
-        u_newReading = digitalRead(pin);
+    bool update() {                            // update and return debounced button status
+      bool newReading = digitalRead(_gpiopin);
+      if (newReading != _rawState) { 
+        _timer = millis();  
+        _rawState = newReading;
       }
-      state = u_newReading;
+      if ( (unsigned long)(millis() - _timer) > _debounceDelay) _debouncedState = newReading;
+      return _debouncedState;
+    }    
+
+    bool isPressed() {                          // returns TRUE if button is curently pressed
+      if (_normalState == LOW) return update();
+      else return (!update());
     }
 
-    bool getState() {                         // returns the logic state of the gpio pin
-      update();
-      return state;
+    bool beenPressed() {                        // returns TRUE once per button press
+      bool cState = isPressed();
+      if (cState == LOW) _beenReleased = HIGH;   
+      if (_beenReleased == LOW) cState = LOW;     
+      if (cState == HIGH) _beenReleased = LOW;   
+      return cState;
     }
 
-    bool isPressed() {                        // returns TRUE if button is curently pressed
-      if (normalState == LOW) return getState();
-      else return (!getState());
+    void debounce(int debounceDelay) {          // change debounce delay setting
+      _debounceDelay = max(debounceDelay, 0);
     }
+    
 }; 
+
+
+// ----------------------------------------------------------------
+//                          -repeating Timer
+// ---------------------------------------------------------------- 
+// repeat an operation periodically 
+// usage example:   static repeatTimer timer1;             // set up a timer     
+//                  if (timer1.check(2000)) {do stuff};    // repeat every 2 seconds
+
+class repeatTimer {
+
+  private:
+    uint32_t  _lastTime;                                              // store of last time the event triggered
+    bool _enabled;                                                    // if timer is enabled
+
+  public:
+    repeatTimer() {
+      reset();
+      enable();
+    }
+
+    bool check(uint32_t timerInterval, bool timerReset=1) {           // check if supplied time has passed 
+      if ( (unsigned long)(millis() - _lastTime) >= timerInterval ) {
+        if (timerReset) reset(); 
+        if (_enabled) return 1;
+      } 
+      return 0;
+    }
+
+    void disable() {                                                  // disable the timer
+      _enabled = 0;
+    }
+
+    void enable() {                                                   // enable the timer
+      _enabled = 1;
+    }    
+    
+    void reset() {                                                    // reset the timer
+      _lastTime = millis();
+    }
+};
 
 
 // --------------------------- E N D -----------------------------
