@@ -1,53 +1,55 @@
 /*******************************************************************************************************************
  *
- *                              Basic web server For ESP8266/ESP32 using Arduino IDE 
- * 
+ *                              Basic web server For ESP8266/ESP32 using Arduino IDE
+ *
  *                                   https://github.com/alanesq/BasicWebserver
- * 
- *               Tested with ESP32 board manager version 1.0.6, ESP8266 board manager version 2.7.4, 
- *                           WifiManager v1.7.4
- * 
- *                           Included files: email.h, standard.h, ota.h, oled.h, gsm.h & wifi.h 
- *             
- *             
+ *
+ *               Tested with ESP32 board manager version 1.0.6, ESP8266 board manager version 2.7.4,
+ *                           WifiManager v1.7.4.
+ *
+ *                   Included files: email.h, standard.h, ota.h, oled.h, neopixel.h, gsm.h & wifi.h
+ *
+ *
  *      I use this sketch as the starting point for most of my ESP based projects.   It is the simplest way
  *      I have found to provide a basic web page displaying updating information, control buttons etc..
  *      It also has the ability to retrieve a web page as text (see: requestWebPage in wifi.h).
- *      For a more advanced method examples see: 
+ *      For a more advanced method examples see:
  *                 https://github.com/alanesq/BasicWebserver/blob/master/misc/VeryBasicWebserver.ino
- *                                                     
- *                                                      
+ *
+ *
  *      Note:  To add ESP8266/32 ability to the Arduino IDE enter the below two lines in to FILE/PREFERENCES/BOARDS MANAGER
  *                 http://arduino.esp8266.com/stable/package_esp8266com_index.json
  *                 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
  *             You can then add them in TOOLS/BOARD/BOARDS MANAGER (search for esp8266 or ESP32)
- *          
- *      First time the ESP starts it will create an access point "ESPPortal" which you need to connect to in order to enter your wifi details.  
+ *
+ *      First time the ESP starts it will create an access point "ESPPortal" which you need to connect to in order to enter your wifi details.
  *             default password = "12345678"   (change this in wifi.h)
  *             see: https://randomnerdtutorials.com/wifimanager-with-esp8266-autoconnect-custom-parameter-and-manage-your-ssid-and-password
- * 
- *      Much of the sketch is the code from other people's work which I have combined together, I believe I have links 
+ *
+ *      Much of the sketch is the code from other people's work which I have combined together, I believe I have links
  *      to all the sources but let me know if I have missed anyone.
  *
  *                                                                                      Created by: www.alanesq.eu5.net
- *                                                                               
- *        BasicWebserver is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the 
+ *
+ *        Distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
  *        implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- *      
+ *
  ********************************************************************************************************************
 
  Lots of great info: https://randomnerdtutorials.com  or  https://techtutorialsx.com or https://www.baldengineer.com/
- 
+
  Handy way to try out your C++ code: https://coliru.stacked-crooked.com/
- 
+
  GPIO pin info:  esp32: https://electrorules.com/esp32-pinout-reference/
                esp8266: https://electrorules.com/esp8266-nodemcu-pinout-reference/
 
-*/                  
+*/
 
 #if (!defined ESP8266 && !defined ESP32)
   #error This sketch is for an esp8266 or esp32 only
 #endif
+
+#include <Arduino.h>    // required by PlatformIO
 
 
 // ---------------------------------------------------------------
@@ -57,7 +59,7 @@
 
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "17Nov21";                      // version of this sketch
+  const char* sversion = "20Nov21";                      // version of this sketch
 
   const bool serialDebug = 1;                            // provide debug info on serial port
 
@@ -70,7 +72,7 @@
   #define ENABLE_EMAIL 0                                 // Enable E-mail support
 
   #define ENABLE_NEOPIXEL 0                              // Enable Neopixel support
-  
+
   #define ENABLE_OTA 1                                   // Enable Over The Air updates (OTA)
   const String OTAPassword = "12345678";                 // Password to enable OTA service (supplied as - http://<ip address>?pwd=xxxx )
 
@@ -78,9 +80,8 @@
 
   const char datarefresh[] = "2000";                     // Refresh rate of the updating data on web page (ms)
   const char JavaRefreshTime[] = "400";                  // time delay when loading url in web pages via Javascript (ms)
-  
-  const byte LogNumber = 30;                             // number of entries in the system log
 
+  const byte LogNumber = 30;                             // number of entries in the system log
   const uint16_t ServerPort = 80;                        // ip port to serve web pages on
 
   const byte onboardLED = 22;                            // indicator LED pin - 2 or 16 on esp8266 nodemcu, 3 on esp8266-01, 2 on ESP32, 22 on esp32 lolin lite
@@ -91,26 +92,30 @@
   const uint16_t ledBlinkRate = 1500;                    // Speed to blink the status LED (milliseconds) - also perform some system tasks
 
   const int serialSpeed = 115200;                        // Serial data speed to use
-    
+
 
 // ---------------------------------------------------------------
 
 
 // forward declarations (so that the functions can be out of order of execution)
-  void log_system_message(String);   // in standard.h
-     
+  void log_system_message(String smes);   // in standard.h
+  void handleRoot();
+  //void rootUserInput(WiFiClient &client);
+  void handleData();
+  void handlePing();
+  void settingsEeprom(bool eDirection);
+  void handleTest();
+
 
 // ---------------------------------------------------------------
 
 
-//#define ARRAYSIZE(x) (sizeof(x)/sizeof(x[0]))      // calculate the size of an array
-
-int radioButton = 0;                    // Temporary variable used in demo radio buttons on root web page
+int _TEMPVARIABLE_ = 1;                 // Temporary variable used in demo radio buttons on root web page and neopixel demo
 
 bool OTAEnabled = 0;                    // flag to show if OTA has been enabled (via supply of password in http://x.x.x.x/ota)
 bool GSMconnected = 0;                  // flag toshow if the gsm module is connected ok (in gsm.h)
 bool wifiok = 0;                        // flag to show if wifi connection is ok
- 
+
 #include "wifi.h"                       // Load the Wifi / NTP stuff
 
 #include "standard.h"                   // Some standard procedures
@@ -132,7 +137,7 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
 #endif
 
 #if ENABLE_NEOPIXEL
-  #include "neopixel.h"                 // Neopixels 
+  #include "neopixel.h"                 // Neopixels
 #endif
 
 #if ENABLE_OLED
@@ -144,7 +149,7 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
     #include "email.h"
 #endif
 
-  
+
 // ---------------------------------------------------------------
 //    -SETUP     SETUP     SETUP     SETUP     SETUP     SETUP
 // ---------------------------------------------------------------
@@ -152,9 +157,9 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
 // setup section (runs once at startup)
 
 void setup() {
-    
+
   if (serialDebug) {       // if serialdebug info. is enabled
-    Serial.begin(serialSpeed); while (!Serial); delay(50);       // start serial comms  
+    Serial.begin(serialSpeed); while (!Serial); delay(50);       // start serial comms
     delay(200);
 
     Serial.println("\n\n\n");                                    // some line feeds
@@ -163,7 +168,7 @@ void setup() {
     Serial.println("-----------------------------------");
     Serial.println( "Device type: " + String(ARDUINO_BOARD) + ", chip id: " + String(ESP_getChipId(), HEX));
     // Serial.println(ESP.getFreeSketchSpace());
-    #if defined(ESP8266)     
+    #if defined(ESP8266)
         Serial.println("Chip ID: " + ESP.getChipId());
         rst_info *rinfo = ESP.getResetInfoPtr();
         Serial.println("ResetInfo: " + String((*rinfo).reason) + ": " + ESP.getResetReason());
@@ -174,15 +179,15 @@ void setup() {
   }
 
   #if ENABLE_NEOPIXEL    // initialise Neopixels
-    neopixelSetup(); 
-  #endif  
+    neopixelSetup();
+  #endif
 
   #if ENABLE_GSM
-    setupGSM();          // initialise GSM board
+    GSMSetup();          // initialise GSM board
   #endif
- 
-  // if (serialDebug) Serial.setDebugOutput(true);         // to enable extra diagnostic info  
-   
+
+  // if (serialDebug) Serial.setDebugOutput(true);         // to enable extra diagnostic info
+
   statusLed1.on();                                         // turn status led on until wifi has connected (see standard.h)
 
   startWifiManager();                                      // Connect to wifi (see wifi.h)
@@ -191,14 +196,14 @@ void setup() {
     oledSetup();         // initialise the oled display - see oled.h
     // display IP address on oled
       IPAddress cip = WiFi.localIP();
-      String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);    
+      String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
       displayMessage("Started", "IP=" + clientIP);
-  #endif  
+  #endif
 
   #if EEPROM_STORE
     settingsEeprom(0);       // read stored settings from eeprom in to variables
   #endif
-  
+
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
     //    Serial.println("starting access point");
@@ -207,29 +212,29 @@ void setup() {
     //    IPAddress myIP = WiFi.softAPIP();
     //    if (serialDebug) Serial.print("Access Point Started - IP address: ");
     //    Serial.println(myIP);
-      
+
   // set up web page request handling
     server.on(HomeLink, handleRoot);         // root page
     server.on("/data", handleData);          // displays information which updates every few seconds (used by root web page)
     server.on("/ping", handlePing);          // ping requested
     server.on("/log", handleLogpage);        // system log
-    server.on("/test", handleTest);          // testing page 
+    server.on("/test", handleTest);          // testing page
     server.on("/reboot", handleReboot);      // reboot the esp
     server.onNotFound(handleNotFound);       // invalid page requested
     #if ENABLE_OTA
       server.on("/ota", handleOTA);          // ota updates web page
-    #endif    
-  
+    #endif
+
   // start web server
     if (serialDebug) Serial.println("Starting web server");
     server.begin();
-    
+
   // Stop wifi going to sleep (if enabled it can cause wifi to drop out randomly especially on esp8266 boards)
     #if defined ESP8266
-      WiFi.setSleepMode(WIFI_NONE_SLEEP);     
+      WiFi.setSleepMode(WIFI_NONE_SLEEP);
     #elif defined ESP32
-      WiFi.setSleep(false);   
-    #endif    
+      WiFi.setSleep(false);
+    #endif
 
   // Finished connecting to network
     statusLed1.off();                        // turn status led off
@@ -242,20 +247,20 @@ void setup() {
 //   -LOOP     LOOP     LOOP     LOOP     LOOP     LOOP     LOOP
 // ----------------------------------------------------------------
 
-void loop(void){
+void loop(){
 
     #if defined(ESP8266)
         yield();                      // allow esp8266 to carry out wifi tasks (may restart randomly without this)
     #endif
-    server.handleClient();            // service any web page requests 
+    server.handleClient();            // service any web page requests
 
 //    // check if the onboard button has been pressed
 //      if button1.beenPressed() ......
 
-    #if ENABLE_NEOPIXEL 
+    #if ENABLE_NEOPIXEL
       neoLoop();                      // handle neopixel updates
-    #endif  
-  
+    #endif
+
     #if ENABLE_OLED
         oledLoop();                   // handle oled menu system
     #endif
@@ -268,7 +273,7 @@ void loop(void){
         EMAILloop();                  // handle emails
     #endif
 
-    
+
 
 
            // YOUR CODE HERE !
@@ -286,20 +291,52 @@ void loop(void){
             if (!GSMconnected) allOK = 0;                   // if GSM board is not responding ok
           #endif
           time_t t=now();                                   // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
+          if (t == 0);                                      // pointless line to stop PlatformIO getting upset that the variable is not used
           // blink status led
             if (ledBlinkEnabled && allOK) statusLed1.flip(); // invert the LED status if all OK (see standard.h)
-            else statusLed1.off();      
+            else statusLed1.off();
       }
 
-} 
+}
 
+
+// ----------------------------------------------------------------
+//            -Action any user input on root web page
+// ----------------------------------------------------------------
+
+void rootUserInput(WiFiClient &client) {
+    // if radio button "RADIO1" was selected
+      if (server.hasArg("RADIO1")) {
+        String RADIOvalue = server.arg("RADIO1");   // read value of the "RADIO" argument
+        //if radio button 1 selected
+        if (RADIOvalue == "1") {
+          log_system_message("radio button 1 selected");
+          _TEMPVARIABLE_ = 1;
+        }
+        //if radio button 2 selected
+        if (RADIOvalue == "2") {
+          log_system_message("radio button 2 selected");
+          _TEMPVARIABLE_ = 2;
+        }
+        //if radio button 3 selected
+        if (RADIOvalue == "3") {
+          log_system_message("radio button 2 selected");
+          _TEMPVARIABLE_ = 3;
+        }
+      }
+
+    // if button "demobutton" was pressed
+      if (server.hasArg("demobutton")) {
+          log_system_message("demo button was pressed");
+      }
+}
 
 
 // ----------------------------------------------------------------
 //       -root web page requested    i.e. http://x.x.x.x/
 // ----------------------------------------------------------------
 
-void handleRoot() {  
+void handleRoot() {
 
   WiFiClient client = server.client();             // open link with client
   String tstr;                                     // temp store for building line of html
@@ -307,51 +344,19 @@ void handleRoot() {
 
 //  // set document title
 //      client.print("\n<script>\n");
-//      if (enableEmails) client.printf("  document.title = \"%s\";\n", stitle); 
-//      else client.printf("  document.title = \"%s\";\n", "Warning!"); 
+//      if (enableEmails) client.printf("  document.title = \"%s\";\n", stitle);
+//      else client.printf("  document.title = \"%s\";\n", "Warning!");
 //      client.print("</script>\n");
 
   // log page request including clients IP address
     IPAddress cip = client.remoteIP();
     String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
     clientIP = decodeIP(clientIP);               // check for known IP addresses
-    //log_system_message("Root page requested from: " + clientIP);  
+    //log_system_message("Root page requested from: " + clientIP);
 
+  rootUserInput(client);     // Action any user input from this web page
 
-  // action any button presses etc.
-
-    // if demo radio button "RADIO1" was selected 
-      if (server.hasArg("RADIO1")) {
-        String RADIOvalue = server.arg("RADIO1");   // read value of the "RADIO" argument 
-        //if radio button 1 selected
-        if (RADIOvalue == "1") {
-          log_system_message("radio button 1 selected");       
-          // <code here for radio buttons action>
-          radioButton = 1;
-        }
-        //if radio button 2 selected
-        if (RADIOvalue == "2") {
-          log_system_message("radio button 2 selected");       
-          // <code here for radio buttons action>
-          radioButton = 2;
-        }  
-        //if radio button 3 selected
-        if (RADIOvalue == "3") {
-          log_system_message("radio button 2 selected");       
-          // <code here for radio buttons action>
-          radioButton = 3;
-        }              
-      }
-  
-    // if button "demobutton" was pressed  
-      if (server.hasArg("demobutton")) {
-        // demo button was pressed 
-          log_system_message("demo button was pressed");     
-      }
-
-
-  // build the HTML code 
-
+  // Build the HTML
     client.printf("<FORM action='%s' method='post'>\n", HomeLink);     // used by the buttons (action = the page send it to)
     client.write("<P>");                                               // start of section
 
@@ -363,7 +368,7 @@ void handleRoot() {
         client.write("<script>\n");
         client.printf("setTimeout(function() {document.getElementById('dataframe').src='/data';}, %s );\n", JavaRefreshTime);
         client.printf("window.setInterval(function() {document.getElementById('dataframe').src='/data';}, %s );\n", datarefresh);
-        client.write("</script>\n"); 
+        client.write("</script>\n");
 
     // demo radio buttons - "RADIO1"
       client.write("<br>Demo radio buttons\n");
@@ -372,26 +377,26 @@ void handleRoot() {
       client.write("<br>Radio1 button2\n");                                  // radio button 2
       client.write("<INPUT type='radio' name='RADIO1' value='2'>\n");
       client.write("<br>Radio1 button3\n");                                  // radio button 2
-      client.write("<INPUT type='radio' name='RADIO1' value='3'>\n");      
+      client.write("<INPUT type='radio' name='RADIO1' value='3'>\n");
       client.write("<br><INPUT type='reset'>\n");                            // reset selection
       client.write("<INPUT type='submit' value='Action'>\n");                // action button
 
-    // demo standard button 
+    // demo standard button
     //    'name' is what is tested for above to detect when button is pressed, 'value' is the text displayed on the button
-      client.write("<br><br><input style='"); 
+      client.write("<br><br><input style='");
       // if ( x == 1 ) client.write("background-color:red; ");      // to change button color depending on state
       client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
-  
+
     // close page
-      client.write("</P>");    // end of section    
+      client.write("</P>");    // end of section
       client.write("</form>\n");                                             // end form section (used by buttons etc.)
       webfooter(client);                                                     // html page footer
-      delay(3);        
+      delay(3);
       client.stop();
 }
 
-  
+
 // ----------------------------------------------------------------
 //     -data web page requested     i.e. http://x.x.x.x/data
 // ----------------------------------------------------------------
@@ -410,17 +415,17 @@ void handleData(){
     client.write("\r\n");
     client.write("<!DOCTYPE HTML>\n");
 
-  client.write("<html lang='en'><head><title>data</title></head><body>\n"); 
+  client.write("<html lang='en'><head><title>data</title></head><body>\n");
 
   client.write("<br>Auto refreshing information goes here\n");
-  
+
   // current time
-    tstr = "<br>" + currentTime() + "\n";   
-    client.print(tstr);     
+    tstr = "<br>" + currentTime() + "\n";
+    client.print(tstr);
 
   // last ip client connection
     client.print("<br>Last IP client connected: ");
-    client.print(lastClient);   
+    client.print(lastClient);
 
   // onboard button status
     client.print("<br>The onboard FLASH button is ");
@@ -434,7 +439,7 @@ void handleData(){
     if (GSMconnected) client.print("<br>GSM board connected ok");
     else client.print("<br>GSM board is not responding");
   #endif
-    
+
   // close html page
     client.write("</body></html>\n");
     delay(3);
@@ -448,10 +453,10 @@ void handleData(){
 
 void handlePing(){
 
-  log_system_message("ping web page requested");      
+  log_system_message("ping web page requested");
   String message = "ok";
   server.send(404, "text/plain", message);   // send reply as plain text
-  
+
 }
 
 
@@ -470,28 +475,26 @@ void settingsEeprom(bool eDirection) {
     uint32_t demoInt = 42;         // 4 byte variable to be stored in eeprom as an example of how (can be removed)
 
     int currentEPos = 0;     // current position in eeprom
-    byte tVal;               // data from eeprom
-    int tSize;               // size of stored data
 
-    EEPROM.begin(dataRequired); 
+    EEPROM.begin(dataRequired);
 
     if (eDirection == 0) {
-      
+
       // read settings from Eeprom
       Serial.println("Reading settings from eeprom");
-      
+
       EEPROM.get(currentEPos, demoInt);             // read data
-      if (demoInt < 1 || demoInt > 99) demoInt = 1; // validate 
+      if (demoInt < 1 || demoInt > 99) demoInt = 1; // validate
       currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
-        
+
     } else {
-      
+
       EEPROM.put(currentEPos, demoInt);             // write demoInt to Eeprom
       currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
 
       EEPROM.commit();                              // write the data out to eeprom
     }
-    
+
 }
 #endif
 
@@ -508,8 +511,8 @@ void handleTest(){
     IPAddress cip = client.remoteIP();
     String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
     clientIP = decodeIP(clientIP);               // check for known IP addresses
-    log_system_message("Test page requested from: " + clientIP);   
-  
+    log_system_message("Test page requested from: " + clientIP);
+
   webheader(client);                 // add the standard html header
   client.write("<br>TEST PAGE<br><br>\n");
 
@@ -542,11 +545,11 @@ void handleTest(){
 
 //  // demo of how to request a web page over GSM
 //    requestWebPageGSM("alanesq.eu5.net", "/temp/q.txt", 80);
-    
 
 
 
-  
+
+
   // -----------------------------------------------------------------------------
 
 
