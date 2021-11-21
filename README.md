@@ -1,5 +1,7 @@
 <p align="center"><img src="/Images/BasicWebserver.jpg"/></p>
-                    
+
+Works with both Arduino IDA and PlatformIO
+
 I find that when creating pretty much any new project with an ESP8266 or ESP32 I use this sketch as a starting point, 
 so I have published it here in case it is of any use/interest to anyone else (I also hope that people will offer 
 improvements/suggestions as I am not a professional programmer by any stretch of the imagination).  
