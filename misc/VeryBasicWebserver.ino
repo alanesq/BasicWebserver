@@ -1,7 +1,8 @@
 // ----------------------------------------------------------------
 //
 //
-//       ESP32 / ESp8266  very basic web server demo - 11Jan21
+//       ESP32 / ESp8266  very basic web server demo - 29Nov21
+//       for Arduino IDE or PlatformIO
 //
 //       shows use of AJAX to show updating info on the web page
 //
@@ -25,30 +26,40 @@
 //   ---------------------------------------------------------------------------------------------------------
 
 
-
+#include <Arduino.h>         // required by platformIO
 bool serialDebug = 1;          // enable debugging info on serial port
-  
+
+
+// forward declarations (required by PlatformIO)
+  //String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = "");
+  void handleRoot();
+  void handleTest();
+  void handleButton();
+  void handleAJAX();
+  void handleSendData();
+  void handleLED();
+  void handleNotFound();
 
 
 // ----------------------------------------------------------------
-  
+
 
 //#include <arduino.h>         // required by platformio?
 
 #if defined ESP32
     // esp32
-        byte LEDpin = 2; 
+        byte LEDpin = 2;
         #include <WiFi.h>
         #include <WebServer.h>
-        #include <HTTPClient.h>     
+        #include <HTTPClient.h>
         WebServer server(80);
 #elif defined ESP8266
     //Esp8266
-        byte LEDpin = D4; 
-        #include <ESP8266WiFi.h>  
-        #include <ESP8266WebServer.h>  
-        #include "ESP8266HTTPClient.h"    
-        ESP8266WebServer server(80);  
+        byte LEDpin = D4;
+        #include <ESP8266WiFi.h>
+        #include <ESP8266WebServer.h>
+        #include "ESP8266HTTPClient.h"
+        ESP8266WebServer server(80);
 #else
       #error "This sketch only works with the ESP8266 or ESP32"
 #endif
@@ -56,21 +67,21 @@ bool serialDebug = 1;          // enable debugging info on serial port
 
 // ----------------------------------------------------------------
 
-  
-// this section runs once at startup 
 
-  
+// this section runs once at startup
+
+
 void setup() {
 
   Serial.begin(115200);       // start serial comms at speed 115200
   delay(200);
   Serial.println("\n\nWebserver demo sketch");
-  Serial.println("- Reset reason: " + ESP.getResetReason());
-  
+  //Serial.println("- Reset reason: " + ESP.getResetReason());
+
   // onboard LEDs
     pinMode(LEDpin, OUTPUT);
-    digitalWrite(LEDpin, HIGH);   
-  
+    digitalWrite(LEDpin, HIGH);
+
   // Connect to Wifi
     Serial.print("Connecting to ");
     Serial.println(SSID);
@@ -84,25 +95,25 @@ void setup() {
 
   // set up web server pages to serve
     server.on("/", handleRoot);                   // root web page (i.e. when root page is requested run procedure 'handleroot')
-    server.on("/test", handleTest);               // test web page 
+    server.on("/test", handleTest);               // test web page
     server.on("/button", handleButton);           // demo simple use of buttons
     server.on("/ajax", handleAJAX);               // demo using AJAX to update information on the page (also javascript buttons)
       server.on("/senddata", handleSendData);     // requested by the AJAX web page to request current millis value
-      server.on("/setLED", handleLED);            // action when a button is clicked on the AJAX page 
+      server.on("/setLED", handleLED);            // action when a button is clicked on the AJAX page
     server.onNotFound(handleNotFound);            // if invalid url is requested
 
   // start web server
-    server.begin();    
-    
-    // stop the wifi being turned off if not used for a while 
+    server.begin();
+
+    // stop the wifi being turned off if not used for a while
       #if defined ESP32
-        WiFi.setSleep(false); 
+        WiFi.setSleep(false);
       #else
-        WiFi.setSleepMode(WIFI_NONE_SLEEP); 
+        WiFi.setSleepMode(WIFI_NONE_SLEEP);
       #endif
-        
-    WiFi.mode(WIFI_STA);                          // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF 
-        
+
+    WiFi.mode(WIFI_STA);                          // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
+
 }  // setup
 
 
@@ -115,16 +126,16 @@ void setup() {
 
 void loop() {
 
-  server.handleClient();                         // service any web page requests 
+  server.handleClient();                         // service any web page requests
 
   //// flash onboard LED
-  //digitalWrite(LEDpin, !digitalRead(LEDpin));    // invert onboard LED status 
+  //digitalWrite(LEDpin, !digitalRead(LEDpin));    // invert onboard LED status
   //delay(200);                                    // wait 200 milliseconds
 
   #if defined(ESP8266)
       yield();                      // allow esp8266 to carry out wifi tasks (may restart randomly without this)
   #endif
-  
+
 }  // loop
 
 
@@ -141,7 +152,7 @@ void handleRoot(){
   String message = "root web page";
 
   server.send(404, "text/plain", message);   // send reply as plain text
-  
+
 }  // handleRoot
 
 
@@ -167,7 +178,7 @@ void handleTest(){
     client.print("</body></html>\n");
     delay(3);
     client.stop();
-  
+
 }  // handleTest
 
 
@@ -180,26 +191,26 @@ void handleTest(){
 void handleButton(){
 
   if (serialDebug) Serial.println("Button page requested");
-    
+
   // check if button1 has been pressed
     if (server.hasArg("button1")) {
-        Serial.println("Button 1 was pressed");       
+        Serial.println("Button 1 was pressed");
     }
 
   // check if button2 has been pressed
     if (server.hasArg("button2")) {
-        Serial.println("Button 2 was pressed");       
+        Serial.println("Button 2 was pressed");
     }
 
-    
+
   // send reply to client
-    
+
   WiFiClient client = server.client();     // open link with client
 
   // html header
     client.print("<!DOCTYPE html> <html lang='en'> <head> <title>Web Demo</title> </head> <body>\n");         // basic html header
     client.print("<FORM action='/button' method='post'>\n");       // used by the buttons in the html (action = the web page to send it to
-    
+
   // html body
     client.print("<h1>Button demo page</h1>\n");
     if (server.hasArg("button1")) client.print("Button 1 has been pressed!");
@@ -211,7 +222,7 @@ void handleButton(){
     client.print("</body></html>\n");
     delay(3);
     client.stop();
-  
+
 }  // handleButton
 
 
@@ -221,7 +232,7 @@ void handleButton(){
 // demonstrate use of AJAX to refresh info. on web page
 // see:  https://circuits4you.com/2018/02/04/esp8266-ajax-update-part-of-web-page-without-refreshing/
 // to store html in program memory to save ram use command:     const char index_html[] PROGMEM = R"rawliteral( <your html here> )rawliteral";
-  
+
 void handleAJAX() {
 
   WiFiClient client = server.client();     // open link with client
@@ -229,12 +240,12 @@ void handleAJAX() {
   // log page request including clients IP address
     IPAddress cip = client.remoteIP();
     Serial.println("Ajax page requested from: " + String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]) );
-  
-  
+
+
   //     ---------------------- html ----------------------
-  
+
   client.print (R"=====(
-    
+
     <!DOCTYPE html>
     <html lang='en'>
     <head>
@@ -252,10 +263,10 @@ void handleAJAX() {
         Received text : <span id='ReceivedText'>NA</span><br>
         LED State is : <span id='LEDState'>NA</span><br>
     </div>
-      
+
   )=====");
-  
-  //     ------------------- JavaScript -------------------  
+
+  //     ------------------- JavaScript -------------------
 
   client.print (R"=====(<script>
 
@@ -268,7 +279,7 @@ void handleAJAX() {
        };
        xhttp.open('GET', 'setLED?LEDstate='+led, true);
        xhttp.send();}
-       
+
        function getData() {
           var xhttp = new XMLHttpRequest();
           xhttp.onreadystatechange = function() {
@@ -280,26 +291,26 @@ void handleAJAX() {
        };
        xhttp.open('GET', 'senddata', true);
        xhttp.send();}
-       
+
        setInterval(function() {
           getData();
         }, 2000);
-          
+
   </script>)=====");
-  //     --------------------------------------------------    
+  //     --------------------------------------------------
 
   // close html page
     client.print("</body></html>\n");        // close HTML
     delay(3);
     client.stop();
-  
+
 }   // handleAJAX
 
 
 // send data to AJAX web page
 //   it replies with two items comma separated: the value in millis and some text
 void handleSendData() {
-   String reply = String(millis());                     // item 1 
+   String reply = String(millis());                     // item 1
    reply += ",";
    reply += "This text sent by handleSendtime()";       // item 2
    server.send(200, "text/plane", reply); //Send millis value only to client ajax request
@@ -317,7 +328,7 @@ void handleLED() {
       ledState = "ON";                            //Feedback parameter
     } else {
       digitalWrite(LEDpin,HIGH);                  //LED OFF
-      ledState = "OFF";                           //Feedback parameter  
+      ledState = "OFF";                           //Feedback parameter
     }
     server.send(200, "text/plane", ledState);     //Send web page
 }
@@ -333,7 +344,7 @@ void handleNotFound() {
   if (serialDebug) Serial.println("Invalid page requested");
 
   String tReply;
-  
+
   tReply = "File Not Found\n\n";
   tReply += "URI: ";
   tReply += server.uri();
@@ -349,7 +360,7 @@ void handleNotFound() {
 
   server.send ( 404, "text/plain", tReply );
   tReply = "";      // clear variable
-  
+
 }  // handleNotFound
 
 
@@ -363,7 +374,7 @@ void handleNotFound() {
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text 
+//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text
 //          e.g.   String reply = requestWebPage("192.168.1.166","/log",80,600,"");
 
 String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
@@ -373,30 +384,30 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
   char received[maxChars + 1];            // temp store for incoming character data
   int received_counter = 0;               // number of characters which have been received
 
-  if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/" 
+  if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/"
 
   if (serialDebug) {
     Serial.print("requesting web page: ");
     Serial.print(ip);
     Serial.println(page);
   }
-     
+
     WiFiClient client;
 
-    // Connect to the site 
-      if (!client.connect(ip.c_str() , port)) {                                      
-        if (serialDebug) Serial.println("Web client connection failed");   
+    // Connect to the site
+      if (!client.connect(ip.c_str() , port)) {
+        if (serialDebug) Serial.println("Web client connection failed");
         return "web client connection failed";
-      } 
+      }
       if (serialDebug) Serial.println("Connected to host - sending request...");
-    
+
     // send request - A basic request looks something like: "GET /index.html HTTP/1.1\r\nHost: 192.168.0.4:8085\r\n\r\n"
       client.print("GET " + page + " HTTP/1.1\r\n" +
-                   "Host: " + ip + "\r\n" + 
+                   "Host: " + ip + "\r\n" +
                    "Connection: close\r\n\r\n");
-  
+
       if (serialDebug) Serial.println("Request sent - waiting for reply...");
-  
+
     // Wait for a response
       uint32_t ttimer = millis();
       while ( !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
@@ -406,23 +417,23 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
 
     // read the response
       while ( client.available() && received_counter < maxChars ) {
-        delay(4);      
+        delay(4);
         received[received_counter] = char(client.read());     // read one character
         received_counter+=1;
       }
       received[received_counter] = '\0';     // end of string marker
-            
+
     if (serialDebug) {
       Serial.println("--------received web page-----------");
       Serial.println(received);
       Serial.println("------------------------------------");
       Serial.flush();     // wait for serial data to finish sending
     }
-    
+
     client.stop();    // close connection
     if (serialDebug) Serial.println("Connection closed");
 
-    // if cuttoffText was supplied then only return the text following this 
+    // if cuttoffText was supplied then only return the text following this
       if (cuttoffText != "") {
         char* locus = strstr(received,cuttoffText.c_str());    // locus = pointer to the found text
         if (locus) {                                           // if text was found
@@ -430,7 +441,7 @@ String requestWebPage(String ip, String page, int port, int maxChars, String cut
           return locus;                                        // return the reply text following 'cuttoffText'
         } else if (serialDebug) Serial.println("The text '" + cuttoffText + "' WAS NOT found in reply");
       }
-    
+
   return received;        // return the full reply text
 }
 
