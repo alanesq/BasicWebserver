@@ -9,7 +9,7 @@ It is not all my own work, just something I have put together for my own use fro
 
 It is the easiest way I have found to serve web pages with control buttons, updating information, a log of activity
 BTW - This sketch will automatically adjust to running on either a ESP8266 or a ESP32
-For a more advanced option for showing updating info see: https://github.com/alanesq/BasicWebserver/blob/master/misc/VeryBasicWebserver.ino
+For a more advanced option for showing updating info see: https://github.com/alanesq/misc/blob/main/VeryBasicWebserver.ino
 
 It has built in support for sending emails, getting the real time from NTP, a simple Oled display menu system, GSM board support and OTA updating.
 
