@@ -1,8 +1,8 @@
 // ----------------------------------------------------------------
 //
 //
-//       ESP32 / ESp8266  very basic web server demo - 29Nov21
-//       for Arduino IDE or PlatformIO
+//       ESP32 / ESp8266  very basic web server demo - 29Dec21
+//                for Arduino IDE or PlatformIO
 //
 //       shows use of AJAX to show updating info on the web page
 //
@@ -14,13 +14,10 @@
 
 //   ---------------------------------------------------------------------------------------------------------
 
-//                                      Wifi Settings
+//         Wifi Settings - uncomment and set here if not stored in platformio.ini
 
-#include <wifiSettings.h>       // delete this line, un-comment the below two lines and enter your wifi details
-
-//const char *SSID = "your_wifi_ssid";
-
-//const char *PWD = "your_wifi_pwd";
+//  #define SSID_NAME "Wifi SSID"
+//  #define SSID_PASWORD "wifi password"
 
 
 //   ---------------------------------------------------------------------------------------------------------
@@ -39,6 +36,7 @@ bool serialDebug = 1;          // enable debugging info on serial port
   void handleSendData();
   void handleLED();
   void handleNotFound();
+  int requestWebPage(String*, String*, int);
 
 
 // ----------------------------------------------------------------
@@ -82,16 +80,24 @@ void setup() {
     pinMode(LEDpin, OUTPUT);
     digitalWrite(LEDpin, HIGH);
 
-  // Connect to Wifi
-    Serial.print("Connecting to ");
-    Serial.println(SSID);
-    WiFi.begin(SSID, PWD);
-    while (WiFi.status() != WL_CONNECTED) {
-      Serial.print(".");
-      delay(500);
-    }
-    Serial.print("\nConnected - IP: ");
-    Serial.println(WiFi.localIP());
+    // Connect to wifi
+      if (serialDebug) {
+        Serial.print("\nConnecting to ");
+        Serial.print(SSID_NAME);
+        Serial.print("\n   ");
+      }
+      WiFi.begin(SSID_NAME, SSID_PASWORD);         // can be set in platformio.ini
+      while (WiFi.status() != WL_CONNECTED) {
+          delay(500);
+          if (serialDebug) Serial.print(".");
+      }
+      if (serialDebug) {
+        Serial.print("\nWiFi connected, ");
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+      }
+      server.begin();                               // start web server
+      digitalWrite(LEDpin, LOW);
 
   // set up web server pages to serve
     server.on("/", handleRoot);                   // root web page (i.e. when root page is requested run procedure 'handleroot')
@@ -149,7 +155,7 @@ void handleRoot(){
 
   if (serialDebug) Serial.println("Root page requested");
 
-  String message = "root web page";
+  String message = "root web page.  Other pages are /test, /button, /ajax";
 
   server.send(404, "text/plain", message);   // send reply as plain text
 
@@ -374,76 +380,37 @@ void handleNotFound() {
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-//     parameters = ip address, page to request, port to use (usually 80), maximum chars to receive, ignore all in reply before this text
-//          e.g.   String reply = requestWebPage("192.168.1.166","/log",80,600,"");
+//   @param    page         web page to request
+//   @param    received     String to store response in
+//   @param    maxWaitTime  maximum time to wait for reply (ms)
+//   @returns  http code
+// see:  https://randomnerdtutorials.com/esp32-http-get-post-arduino/#http-get-1
+// to do:  limit size of reply
 
-String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
+int requestWebPage(String* page, String* received, int maxWaitTime=5000){
 
-  int maxWaitTime = 3000;                 // max time to wait for reply (ms)
+  if (serialDebug) Serial.println("requesting web page: " + *page);
 
-  char received[maxChars + 1];            // temp store for incoming character data
-  int received_counter = 0;               // number of characters which have been received
+  WiFiClient client;
+  HTTPClient http;     // see:  https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266HTTPClient
+  http.setTimeout(maxWaitTime);
+  http.begin(client, *page);      // for https requires (client, *page, thumbprint)  e.g.String thumbprint="08:3B:71:72:02:43:6E:CA:ED:42:86:93:BA:7E:DF:81:C4:BC:62:30";
+  int httpCode = http.GET();      // http codes: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+  if (serialDebug) Serial.println("http code: " + String(httpCode));
 
-  if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/"
-
-  if (serialDebug) {
-    Serial.print("requesting web page: ");
-    Serial.print(ip);
-    Serial.println(page);
+  if (httpCode > 0) {
+    *received = http.getString();
+  } else {
+    *received = "error:" + String(httpCode);
   }
+  if (serialDebug) Serial.println(*received);
 
-    WiFiClient client;
+  http.end();   //Close connection
+  if (serialDebug) Serial.println("Web connection closed");
 
-    // Connect to the site
-      if (!client.connect(ip.c_str() , port)) {
-        if (serialDebug) Serial.println("Web client connection failed");
-        return "web client connection failed";
-      }
-      if (serialDebug) Serial.println("Connected to host - sending request...");
+  return httpCode;
 
-    // send request - A basic request looks something like: "GET /index.html HTTP/1.1\r\nHost: 192.168.0.4:8085\r\n\r\n"
-      client.print("GET " + page + " HTTP/1.1\r\n" +
-                   "Host: " + ip + "\r\n" +
-                   "Connection: close\r\n\r\n");
-
-      if (serialDebug) Serial.println("Request sent - waiting for reply...");
-
-    // Wait for a response
-      uint32_t ttimer = millis();
-      while ( !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
-        delay(10);
-      }
-      if ( ((uint32_t)(millis() - ttimer) > maxWaitTime ) && serialDebug) Serial.println("-Timed out");
-
-    // read the response
-      while ( client.available() && received_counter < maxChars ) {
-        delay(4);
-        received[received_counter] = char(client.read());     // read one character
-        received_counter+=1;
-      }
-      received[received_counter] = '\0';     // end of string marker
-
-    if (serialDebug) {
-      Serial.println("--------received web page-----------");
-      Serial.println(received);
-      Serial.println("------------------------------------");
-      Serial.flush();     // wait for serial data to finish sending
-    }
-
-    client.stop();    // close connection
-    if (serialDebug) Serial.println("Connection closed");
-
-    // if cuttoffText was supplied then only return the text following this
-      if (cuttoffText != "") {
-        char* locus = strstr(received,cuttoffText.c_str());    // locus = pointer to the found text
-        if (locus) {                                           // if text was found
-          if (serialDebug) Serial.println("The text '" + cuttoffText + "' was found in reply");
-          return locus;                                        // return the reply text following 'cuttoffText'
-        } else if (serialDebug) Serial.println("The text '" + cuttoffText + "' WAS NOT found in reply");
-      }
-
-  return received;        // return the full reply text
-}
+}  // requestWebPage
 
 
 // ----------------------------------------------------------------
