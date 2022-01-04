@@ -144,7 +144,8 @@ void webfooter(WiFiClient &client) {
       else if (tstat == timeNeedsSync) client.print(" | NTP Sync failed");
       else if (tstat == timeNotSet) client.print(" | NTP Failed");
 
-     // client.printf(" | Spiffs: %dK", ( SPIFFS.totalBytes() - SPIFFS.usedBytes() / 1000 ) );             // if using spiffs
+     //// free space on spiffs
+     //  client.printf(" | Spiffs: %dK", ( SPIFFS.totalBytes() - SPIFFS.usedBytes() ) / 1024  );             // if using spiffs
 
      // client.printf(" | MAC: %2x%2x%2x%2x%2x%2x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);       // mac address
 
