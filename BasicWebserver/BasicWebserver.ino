@@ -1,6 +1,6 @@
 /*******************************************************************************************************************
  *
- *                              Basic web server For ESP8266/ESP32 using Arduino IDE
+ *                      Basic web server For ESP8266/ESP32 using Arduino IDE or PlatformIO
  *
  *                                   https://github.com/alanesq/BasicWebserver
  *
@@ -46,26 +46,41 @@
 */
 
 #if (!defined ESP8266 && !defined ESP32)
-  #error This sketch is for an esp8266 or esp32 only
+  #error This code is for ESP8266 or ESP32 only
 #endif
 
-#include <Arduino.h>    // required by PlatformIO
+
+// ---------------------------------------------------------------
+
+
+// Required by PlatformIO
+
+  #include <Arduino.h>                      // required by PlatformIO
+
+  // forward declarations
+    void log_system_message(String smes);   // in standard.h
+    void displayMessage(String, String);    // in oled.h
+    void handleRoot();
+    void handleData();
+    void handlePing();
+    void settingsEeprom(bool eDirection);
+    void handleTest();
 
 
 // ---------------------------------------------------------------
 //                          -SETTINGS
 // ---------------------------------------------------------------
 
-
   const char* stitle = "BasicWebServer";                 // title of this sketch
 
-  const char* sversion = "20Nov21";                      // version of this sketch
+  const char* sversion = "31Jan22";                      // version of this sketch
 
   const bool serialDebug = 1;                            // provide debug info on serial port
 
-  #define EEPROM_STORE 0                                 // if some settings are to be stored in eeprom
+  #define ENABLE_EEPROM 1                                // if some settings are to be stored in eeprom
+  // Note on esp32 this has now been superseded preferences.h - see: by https://randomnerdtutorials.com/esp32-save-data-permanently-preferences/
 
-  #define ENABLE_OLED 0                                  // Enable OLED display support
+  #define ENABLE_OLED_MENU 1                             // Enable OLED / rotary encoder based menu
 
   #define ENABLE_GSM 0                                   // Enable GSM board support (not yet fully working - oct21)
 
@@ -78,8 +93,7 @@
 
   const char HomeLink[] = "/";                           // Where home button on web pages links to (usually "/")
 
-  const char datarefresh[] = "2000";                     // Refresh rate of the updating data on web page (ms)
-  const char JavaRefreshTime[] = "400";                  // time delay when loading url in web pages via Javascript (ms)
+  int dataRefresh = 2;                                   // Refresh rate of the updating data on web page (seconds)
 
   const byte LogNumber = 30;                             // number of entries in the system log
   const uint16_t ServerPort = 80;                        // ip port to serve web pages on
@@ -97,34 +111,19 @@
 // ---------------------------------------------------------------
 
 
-// forward declarations (so that the functions can be out of order of execution)
-  void log_system_message(String smes);   // in standard.h
-  void handleRoot();
-  //void rootUserInput(WiFiClient &client);
-  void handleData();
-  void handlePing();
-  void settingsEeprom(bool eDirection);
-  void handleTest();
-
-
-// ---------------------------------------------------------------
-
-
 int _TEMPVARIABLE_ = 1;                 // Temporary variable used in demo radio buttons on root web page and neopixel demo
 
 bool OTAEnabled = 0;                    // flag to show if OTA has been enabled (via supply of password in http://x.x.x.x/ota)
-bool GSMconnected = 0;                  // flag toshow if the gsm module is connected ok (in gsm.h)
+bool GSMconnected = 0;                  // flag toshow if the gsm module is connected ok (in gsm.h - not fully working)
 bool wifiok = 0;                        // flag to show if wifi connection is ok
 
 #include "wifi.h"                       // Load the Wifi / NTP stuff
-
 #include "standard.h"                   // Some standard procedures
 
-Led statusLed1(onboardLED, LOW);        // set up onboard LED as led1 (LOW = on) - see standard.h
+Led statusLed1(onboardLED, LOW);        // set up onboard LED - see standard.h
+Button button1(onboardButton, HIGH);    // set up the onboard flash button - see standard.h
 
-Button button1(onboardButton, HIGH);    // set up the onboard button (Flash button) - see standard.h
-
-#if EEPROM_STORE
+#if ENABLE_EEPROM
   #include <EEPROM.h>                     // for storing settings in eeprom
 #endif
 
@@ -140,7 +139,7 @@ Button button1(onboardButton, HIGH);    // set up the onboard button (Flash butt
   #include "neopixel.h"                 // Neopixels
 #endif
 
-#if ENABLE_OLED
+#if ENABLE_OLED_MENU
   #include "oled.h"                     // OLED display - i2c version SSD1306
 #endif
 
@@ -160,7 +159,7 @@ void setup() {
 
   if (serialDebug) {       // if serialdebug info. is enabled
     Serial.begin(serialSpeed); while (!Serial); delay(50);       // start serial comms
-    delay(200);
+    delay(2000);      // gives platformio chance to start serial monitor
 
     Serial.println("\n\n\n");                                    // some line feeds
     Serial.println("-----------------------------------");
@@ -190,19 +189,16 @@ void setup() {
 
   statusLed1.on();                                         // turn status led on until wifi has connected (see standard.h)
 
-  startWifiManager();                                      // Connect to wifi (see wifi.h)
-
-  #if ENABLE_OLED
+  #if ENABLE_OLED_MENU
     oledSetup();         // initialise the oled display - see oled.h
-    // display IP address on oled
-      IPAddress cip = WiFi.localIP();
-      String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
-      displayMessage("Started", "IP=" + clientIP);
+    displayMessage(stitle, sversion);
   #endif
 
-  #if EEPROM_STORE
-    settingsEeprom(0);       // read stored settings from eeprom in to variables
+  #if ENABLE_EEPROM
+    settingsEeprom(0);       // read stored settings from eeprom
   #endif
+
+  startWifiManager();                                      // Connect to wifi (see wifi.h)
 
   WiFi.mode(WIFI_STA);     // turn off access point - options are WIFI_AP, WIFI_STA, WIFI_AP_STA or WIFI_OFF
     //    // configure as wifi access point as well
@@ -215,9 +211,9 @@ void setup() {
 
   // set up web page request handling
     server.on(HomeLink, handleRoot);         // root page
-    server.on("/data", handleData);          // displays information which updates every few seconds (used by root web page)
+    server.on("/data", handleData);          // supplies information to update root page via Ajax)
     server.on("/ping", handlePing);          // ping requested
-    server.on("/log", handleLogpage);        // system log
+    server.on("/log", handleLogpage);        // system log (in standard.h)
     server.on("/test", handleTest);          // testing page
     server.on("/reboot", handleReboot);      // reboot the esp
     server.onNotFound(handleNotFound);       // invalid page requested
@@ -238,8 +234,7 @@ void setup() {
 
   // Finished connecting to network
     statusLed1.off();                        // turn status led off
-    log_system_message("Started");
-
+    log_system_message("Started, ip=" + WiFi.localIP().toString());
 }
 
 
@@ -261,7 +256,7 @@ void loop(){
       neoLoop();                      // handle neopixel updates
     #endif
 
-    #if ENABLE_OLED
+    #if ENABLE_OLED_MENU
         oledLoop();                   // handle oled menu system
     #endif
 
@@ -291,12 +286,14 @@ void loop(){
             if (!GSMconnected) allOK = 0;                   // if GSM board is not responding ok
           #endif
           time_t t=now();                                   // read current time to ensure NTP auto refresh keeps triggering (otherwise only triggers when time is required causing a delay in response)
-          if (t == 0);                                      // pointless line to stop PlatformIO getting upset that the variable is not used
+          if (t == 0) t=0;                                  // pointless line to stop PlatformIO getting upset that the variable is not used
           // blink status led
-            if (ledBlinkEnabled && allOK) statusLed1.flip(); // invert the LED status if all OK (see standard.h)
-            else statusLed1.off();
+            if (ledBlinkEnabled && allOK) {
+              statusLed1.flip(); // invert the LED status if all OK (see standard.h)
+            } else {
+              statusLed1.off();
+            }
       }
-
 }
 
 
@@ -305,25 +302,35 @@ void loop(){
 // ----------------------------------------------------------------
 
 void rootUserInput(WiFiClient &client) {
-    // if radio button "RADIO1" was selected
-      if (server.hasArg("RADIO1")) {
-        String RADIOvalue = server.arg("RADIO1");   // read value of the "RADIO" argument
-        //if radio button 1 selected
-        if (RADIOvalue == "1") {
-          log_system_message("radio button 1 selected");
-          _TEMPVARIABLE_ = 1;
-        }
-        //if radio button 2 selected
-        if (RADIOvalue == "2") {
-          log_system_message("radio button 2 selected");
-          _TEMPVARIABLE_ = 2;
-        }
-        //if radio button 3 selected
-        if (RADIOvalue == "3") {
-          log_system_message("radio button 2 selected");
-          _TEMPVARIABLE_ = 3;
-        }
+
+  // if value1 was entered
+    if (server.hasArg("value1")) {
+    String Tvalue = server.arg("value1");   // read value
+    if (Tvalue != NULL) {
+      int val = Tvalue.toInt();
+      log_system_message("Value entered on root page = " + Tvalue );
+    }
+  }
+
+  // if radio button "RADIO1" was selected
+    if (server.hasArg("RADIO1")) {
+      String RADIOvalue = server.arg("RADIO1");   // read value of the "RADIO" argument
+      //if radio button 1 selected
+      if (RADIOvalue == "1") {
+        log_system_message("radio button 1 selected");
+        _TEMPVARIABLE_ = 1;
       }
+      //if radio button 2 selected
+      if (RADIOvalue == "2") {
+        log_system_message("radio button 2 selected");
+        _TEMPVARIABLE_ = 2;
+      }
+      //if radio button 3 selected
+      if (RADIOvalue == "3") {
+        log_system_message("radio button 2 selected");
+        _TEMPVARIABLE_ = 3;
+      }
+    }
 
     // if button "demobutton" was pressed
       if (server.hasArg("demobutton")) {
@@ -340,57 +347,88 @@ void handleRoot() {
 
   WiFiClient client = server.client();             // open link with client
   String tstr;                                     // temp store for building line of html
-  webheader(client);             // html page header  (with extra formatting)
+  webheader(client);                               // html page header  (with extra formatting)
 
-//  // set document title
-//      client.print("\n<script>\n");
-//      if (enableEmails) client.printf("  document.title = \"%s\";\n", stitle);
-//      else client.printf("  document.title = \"%s\";\n", "Warning!");
-//      client.print("</script>\n");
+//  // set document title?
+//      client.println("\n<script>");
+//      client.printf("  document.title = \"%s\";\n", stitle);
+//      client.println("</script>");
 
   // log page request including clients IP address
     IPAddress cip = client.remoteIP();
-    String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
-    clientIP = decodeIP(clientIP);               // check for known IP addresses
-    //log_system_message("Root page requested from: " + clientIP);
+    String clientIP = decodeIP(cip.toString());   // check for known IP addresses
+    log_system_message("Root page requested from: " + clientIP);
 
   rootUserInput(client);     // Action any user input from this web page
 
   // Build the HTML
-    client.printf("<FORM action='%s' method='post'>\n", HomeLink);     // used by the buttons (action = the page send it to)
-    client.write("<P>");                                               // start of section
+    client.printf("<FORM action='%s' method='post'>\n", HomeLink);     // used by the buttons
+    client.println("<P>");
+    client.printf("<h2>Welcome to the BasicWebServer, running on an %s</h2>\n", ARDUINO_BOARD);
 
-    client.print("Welcome to the BasicWebServer, running on a " + String(ARDUINO_BOARD) + "\n");
 
-    // insert an iframe containing the changing data (updates every few seconds using javascript)
-      client.write("<br><iframe id='dataframe' height=150 width=600 frameborder='0'></iframe>\n");
-      // javascript to refresh data display
-        client.write("<script>\n");
-        client.printf("setTimeout(function() {document.getElementById('dataframe').src='/data';}, %s );\n", JavaRefreshTime);
-        client.printf("window.setInterval(function() {document.getElementById('dataframe').src='/data';}, %s );\n", datarefresh);
-        client.write("</script>\n");
+// ---------------------------------------------------------------------------------------------
+//  info which is periodically updated usin AJAX - https://www.w3schools.com/xml/ajax_intro.asp
+
+// empty lines which are populated via vbscript with live data from http://x.x.x.x/data in the form of comma separated text
+//   you can add more or remove unwanted ones as required without modifying the javascript
+  int noLines = 4;      // number of text lines to be populated by javascript
+  for (int i = 0; i < noLines; i++) {
+    client.println("<span id='uline" + String(i) + "'></span><br>");
+  }
+
+// Javascript - to periodically update the above info lines from http://x.x.x.x/data
+// This is the below javascript code compacted to save flash memory via https://www.textfixer.com/html/compress-html-compression.php
+   client.printf(R"=====(  <script> function getData() { var xhttp = new XMLHttpRequest(); xhttp.onreadystatechange = function() { if (this.readyState == 4 && this.status == 200) { var receivedArr = this.responseText.split(','); for (let i = 0; i < receivedArr.length; i++) { document.getElementById('uline' + i).innerHTML = receivedArr[i]; } } }; xhttp.open('GET', 'data', true); xhttp.send();} getData(); setInterval(function() { getData(); }, %d); </script> )=====", dataRefresh * 1000);
+/*
+  // get a comma seperated list from http://x.x.x.x/data and populate the blank lines in html above
+  client.printf(R"=====(
+     <script>
+        function getData() {
+          var xhttp = new XMLHttpRequest();
+          xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            var receivedArr = this.responseText.split(',');
+            for (let i = 0; i < receivedArr.length; i++) {
+              document.getElementById('uline' + i).innerHTML = receivedArr[i];
+            }
+          }
+        };
+        xhttp.open('GET', 'data', true);
+        xhttp.send();}
+        getData();
+        setInterval(function() { getData(); }, %d);
+     </script>
+  )=====", dataRefresh * 1000);
+*/
+
+
+// ---------------------------------------------------------------------------------------------
+
+
+    // demo enter a value
+      client.println("<br><br>Enter a value: <input type='number' style='width: 40px' name='value1' title='enter a value here' title='additional info which pops up'> ");
+      client.println("<input type='submit' name='submit'>");
 
     // demo radio buttons - "RADIO1"
-      client.write("<br>Demo radio buttons\n");
-      client.write("<br>Radio1 button1\n");                                  // radio button 1
-      client.write("<INPUT type='radio' name='RADIO1' value='1'>\n");
-      client.write("<br>Radio1 button2\n");                                  // radio button 2
-      client.write("<INPUT type='radio' name='RADIO1' value='2'>\n");
-      client.write("<br>Radio1 button3\n");                                  // radio button 2
-      client.write("<INPUT type='radio' name='RADIO1' value='3'>\n");
-      client.write("<br><INPUT type='reset'>\n");                            // reset selection
-      client.write("<INPUT type='submit' value='Action'>\n");                // action button
+      client.print(R"=====(
+        <br><br>Demo radio buttons
+        <br>Radio1 button1<INPUT type='radio' name='RADIO1' value='1'>
+        <br>Radio1 button2<INPUT type='radio' name='RADIO1' value='2'>
+        <br>Radio1 button3<INPUT type='radio' name='RADIO1' value='3'>
+        <br><INPUT type='reset'> <INPUT type='submit' value='Action'>
+      )=====");
 
     // demo standard button
     //    'name' is what is tested for above to detect when button is pressed, 'value' is the text displayed on the button
-      client.write("<br><br><input style='");
-      // if ( x == 1 ) client.write("background-color:red; ");      // to change button color depending on state
-      client.write("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
+      client.println("<br><br><input style='");
+      // if ( x == 1 ) client.println("background-color:red; ");      // to change button color depending on state
+      client.println("height: 30px;' name='demobutton' value='Demonstration Button' type='submit'>\n");
 
 
     // close page
-      client.write("</P>");    // end of section
-      client.write("</form>\n");                                             // end form section (used by buttons etc.)
+      client.println("</P>");    // end of section
+      client.println("</form>\n");                                             // end form section (used by buttons etc.)
       webfooter(client);                                                     // html page footer
       delay(3);
       client.stop();
@@ -400,50 +438,33 @@ void handleRoot() {
 // ----------------------------------------------------------------
 //     -data web page requested     i.e. http://x.x.x.x/data
 // ----------------------------------------------------------------
-// This shows information on the root web page in an iframe which refreshes every few seconds
-// not the ideal way to do it but makes the code very simple
+// the root web page requests this periodically via Javascript in order to display updating information.
+// information in the form of comma seperated text is supplied which are then inserted in to blank lines on the web page
+// Note: to change the number of lines displayed update variable 'noLines' in handleroot()
 
 void handleData(){
 
-  WiFiClient client = server.client();          // open link with client
-  String tstr;                                  // temp store for building lines of html;
+   String reply = "";
 
-  // send standard html header
-    client.write("HTTP/1.1 200 OK\r\n");
-    client.write("Content-Type: text/html\r\n");
-    client.write("Connection: close\r\n");
-    client.write("\r\n");
-    client.write("<!DOCTYPE HTML>\n");
+   // line1 - current time
+     reply += "Time: " + currentTime();
+     reply += ",";
 
-  client.write("<html lang='en'><head><title>data</title></head><body>\n");
+   // line2 - last ip client connection
+     reply += "Last IP client connected: " + lastClient;
+     reply += ",";
 
-  client.write("<br>Auto refreshing information goes here\n");
+   // line3 - onboard button status
+     reply += "The onboard FLASH button is ";
+     if (button1.isPressed()) reply += "PRESSED";
+     else reply += "not pressed";
+     reply += ",";
 
-  // current time
-    tstr = "<br>" + currentTime() + "\n";
-    client.print(tstr);
+   // line4 - Misc adnl info section:
+     reply += "Some adnl info can go here....";
 
-  // last ip client connection
-    client.print("<br>Last IP client connected: ");
-    client.print(lastClient);
 
-  // onboard button status
-    client.print("<br>The onboard FLASH button is ");
-    if (button1.isPressed()) client.print("PRESSED");
-    else client.print("not pressed");
-
-  // OTA enabled status
-    if (OTAEnabled) client.printf("%s <br>OTA ENABLED! %s", colRed, colEnd);
-
-  #if ENABLE_GSM
-    if (GSMconnected) client.print("<br>GSM board connected ok");
-    else client.print("<br>GSM board is not responding");
-  #endif
-
-  // close html page
-    client.write("</body></html>\n");
-    delay(3);
-    client.stop();
+   server.send(200, "text/plane", reply); //Send millis value only to client ajax request
 }
 
 
@@ -453,10 +474,15 @@ void handleData(){
 
 void handlePing(){
 
-  log_system_message("ping web page requested");
+  WiFiClient client = server.client();             // open link with client
+
+  // log page request including clients IP address
+  IPAddress cip = client.remoteIP();
+  String clientIP = decodeIP(cip.toString());   // check for known IP addresses
+  log_system_message("Ping page requested from: " + clientIP);
+
   String message = "ok";
   server.send(404, "text/plain", message);   // send reply as plain text
-
 }
 
 
@@ -464,10 +490,9 @@ void handlePing(){
 //                    -settings stored in eeprom
 // ----------------------------------------------------------------
 // @param   eDirection   1=write, 0=read
-// see:  https://www.arduino.cc/en/Reference/EEPROM
-// To store variables other than byte use EEPROM.put(),  increment counter with EEPROM.length()
+// Note on esp32 this has now been superseded by preferences.h - see: by https://randomnerdtutorials.com/esp32-save-data-permanently-preferences/
 
-#if EEPROM_STORE
+#if ENABLE_EEPROM
 void settingsEeprom(bool eDirection) {
 
     const int dataRequired = 30;   // total size of eeprom space required (bytes)
@@ -481,18 +506,17 @@ void settingsEeprom(bool eDirection) {
     if (eDirection == 0) {
 
       // read settings from Eeprom
-      Serial.println("Reading settings from eeprom");
-
       EEPROM.get(currentEPos, demoInt);             // read data
       if (demoInt < 1 || demoInt > 99) demoInt = 1; // validate
       currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
 
     } else {
 
+      // write settings to Eeprom
       EEPROM.put(currentEPos, demoInt);             // write demoInt to Eeprom
       currentEPos += sizeof(demoInt);               // increment to next free position in eeprom
 
-      EEPROM.commit();                              // write the data out to eeprom
+      EEPROM.commit();                              // write the data out (required on esp devices as they simulate eeprom)
     }
 
 }
@@ -509,44 +533,55 @@ void handleTest(){
 
   // log page request including clients IP address
     IPAddress cip = client.remoteIP();
-    String clientIP = String(cip[0]) +"." + String(cip[1]) + "." + String(cip[2]) + "." + String(cip[3]);
-    clientIP = decodeIP(clientIP);               // check for known IP addresses
+    String clientIP = decodeIP(cip.toString());   // check for known IP addresses
     log_system_message("Test page requested from: " + clientIP);
 
   webheader(client);                 // add the standard html header
-  client.write("<br>TEST PAGE<br><br>\n");
+  client.println("<br><H2>TEST PAGE</H2><br>");
 
 
   // ---------------------------- test section here ------------------------------
 
 
 
-//// demo of how to send a sms message via GSM board (phone number is a String in the format "+447871862749")
+// demo of how to send a sms message via GSM board (phone number is a String in the format "+447871862749")
 //  sendSMS(phoneNumber, "this is a test message from the gsm demo sketch");
 
 
-
-//  // demo of how to send an email over Wifi
-//  #if ENABLE_EMAIL
-//    _recepient[0]=0; _message[0]=0; _subject[0]=0;                  // clear any existing text
-//    strcat(_recepient, _emailReceiver);                             // email address to send it to
-//    strcat(_subject,stitle);
-//    strcat(_subject,": test");
-//    strcat(_message,"test email from esp project");
-//    emailToSend=1; lastEmailAttempt=0; emailAttemptCounter=0; sendSMSflag=0;   // set flags that there is an email to be sent
-//  #endif
-
+// demo of how to send an email over Wifi
+  #if ENABLE_EMAIL
+    _recepient[0]=0; _message[0]=0; _subject[0]=0;                  // clear any existing text
+    strcat(_recepient, _emailReceiver);                             // email address to send it to
+    strcat(_subject,stitle);
+    strcat(_subject,": test");
+    strcat(_message,"test email from esp project");
+    emailToSend=1; lastEmailAttempt=0; emailAttemptCounter=0; sendSMSflag=0;   // set flags that there is an email to be sent
+  #endif
 
 
-//// demo of how to request a web page over Wifi
-//  String webpage = requestWebPage("86.3.1.8","/ping",80,800,"");
+// demo of how to request a web page over GSM
+//  requestWebPageGSM("webpage.com", "/q.txt", 80);
 
 
-
-//  // demo of how to request a web page over GSM
-//    requestWebPageGSM("alanesq.eu5.net", "/temp/q.txt", 80);
-
-
+/*
+// demo of how to request a web page
+  // request web page
+    String page = "http://192.168.1.166/ping";   // url to request
+    //String page = "http://192.168.1.176:84/rover.asp?action=devE11on";   // url to request
+    String response;                             // reply will be stored here
+    int httpCode = requestWebPage(&page, &response);
+  // display the reply
+    client.println("Web page requested: '" + page + "' - http code: " + String(httpCode));
+    client.print("<xmp>'");     // enables the html code to be displayed
+    client.print(response);
+    client.println("'</xmp>");
+  // test the reply
+    response.toLowerCase();                    // convert all text in the reply to lower case
+    int tPos = response.indexOf("closed");     // search for text in the reply - see https://www.arduino.cc/en/Tutorial/BuiltInExamples
+    if (tPos != -1) {
+      client.println("rusult contains 'closed' at position " + String(tPos) + "<br>");
+    }
+*/
 
 
 

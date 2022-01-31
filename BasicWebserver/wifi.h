@@ -1,35 +1,31 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections using WifiManager - 10Nov21
- *      
+ *      Wifi / NTP Connections using Autoconnect - 16Jan22
+ *
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
- *             
+ *
  *      Set up wifi for either esp8266 or esp32 plus NTP (network time)
- *      
+ *
  *      see:  https://nodemcu.readthedocs.io/en/release/modules/wifi/
- *                    
- *      Libraries used: 
- *                      ESP_Wifimanager - https://github.com/khoih-prog/ESP_WiFiManager
+ *
+ *      Libraries used:
+ *                      Autoconnect - https://hieromon.github.io/AutoConnect
+ *                                    also installs PageBuilder and ArduinoJson
  *                      TimeLib
  *                      ESPmDNS
- *                    
- *  
+ *
  **************************************************************************************************/
 
+#include <Arduino.h>                      // required by PlatformIO
 
 
 // **************************************** S e t t i n g s ****************************************
 
-    
-    // Configuration Portal (Wifimanager)
-      const char AP_SSID[] = "ESPPortal";
-      const char AP_PASS[] = "12345678";    
 
+// Settings for the configuration portal (Autoconnect)
+  const String AP_SSID = "ESPcam";
+  const String AP_PASS = "12345678";
 
-//     mDNS name
-//       const String mDNS_name = "esp32";
-//       const String mDNS_name = stitle;                                         // use sketch title
-      
 
 
 // *************************************************************************************************
@@ -37,46 +33,58 @@
 
 // forward declarations
   void startWifiManager();
-  String currentTime();
+  String currentTime(bool);
   bool IsBST();
   void sendNTPpacket();
   time_t getNTPTime();
-  String requestWebPage(String, String, int, int);
-  
-  
+  int requestWebPage(String*, String*, int);
+
+
 // ----------------------------------------------------------------
 //                              -Startup
 // ----------------------------------------------------------------
-  
+
 // wifi for esp8266 / esp32
   #if defined ESP32
     #include <esp_wifi.h>
     #include <WiFi.h>
     #include <WiFiClient.h>
-    #include <WebServer.h>
+    //#include <WiFiMulti.h>
+    #include <WebServer.h>    // https://github.com/espressif/arduino-esp32/blob/master/libraries/WebServer
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
-    WebServer server(ServerPort);
-    //#include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS      
+    WebServer ACserver(80);               // temporary for autoconnect
+    WebServer server(ServerPort);         // allows use of different ports
+    //#include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS
   #elif defined ESP8266
     #include <ESP8266WiFi.h>              // https://github.com/esp8266/Arduino
     //needed for library
     #include <DNSServer.h>
+    //#include <ESP8266WiFiMulti.h>
     #include <ESP8266WebServer.h>
     #define ESP_getChipId()   (ESP.getChipId())
-    ESP8266WebServer server(ServerPort);
+    ESP8266WebServer *ACserver = new ESP8266WebServer(80);     // temporary for autoconnect
+    ESP8266WebServer server(ServerPort);                       // allows use of different ports
     //#include <ESP8266mDNS.h>
   #else
-      #error "This sketch only works with ESP8266 or ESP32"
+      #error "wifi.h: This sketch only works with ESP8266 or ESP32"
   #endif
- 
-  #include <ESP_WiFiManager.h>            // https://github.com/khoih-prog/ESP_WiFiManager
-  
+
+// Autoconnect
+  #include <AutoConnect.h>     // https://hieromon.github.io/AutoConnect
+  #if defined ESP32
+    AutoConnect       portal(ACserver);
+  #else
+    AutoConnect       portal(*ACserver);
+  #endif
+  AutoConnectConfig ACconfig;
+
+
 // Time from NTP server
 //  from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
   #include <TimeLib.h>
   #include <WiFiUdp.h>                          // UDP library which is how we communicate with Time Server
   const uint16_t localPort = 8888;              // Just an open port we can use for the UDP packets coming back in
-  const char timeServer[] = "pool.ntp.org"; 
+  const char timeServer[] = "pool.ntp.org";
   const uint16_t NTP_PACKET_SIZE = 48;          // NTP time stamp is in the first 48 bytes of the message
   byte packetBuffer[NTP_PACKET_SIZE];           // buffer to hold incoming and outgoing packets
   WiFiUDP NTPUdp;                               // A UDP instance to let us send and receive packets over UDP
@@ -92,58 +100,51 @@
 
 void startWifiManager() {
 
-  // Start WifiManager
-    ESP_WiFiManager ESP_wifiManager(AP_SSID);
-    ESP_wifiManager.setConfigPortalTimeout(120);
-    #define _WIFIMGR_LOGLEVEL_    3        // logging - Use from 0 to 4. Higher number, more debugging messages and memory usage.
-    if (serialDebug) ESP_wifiManager.setDebugOutput(true);   
+  // autoconnect settings - see https://hieromon.github.io/AutoConnect/adnetwork.html#change-ssid-and-password-for-softap
+    ACconfig.apid = AP_SSID;                    // portal name
+    ACconfig.psk  = AP_PASS;                    // portal password
+    ACconfig.portalTimeout = 2 * 60 * 1000;     // timeout (ms)
 
-  if (ESP_wifiManager.WiFi_SSID() == "") if (serialDebug) Serial.println("No wifi settings found");
-
-  // try connecting to wifi
-    if (serialDebug) Serial.println("Connecting to wifi using: " + String(ESP_WIFIMANAGER_VERSION));
-    WiFi.begin(ESP_wifiManager.WiFi_SSID().c_str(), ESP_wifiManager.WiFi_Pass().c_str());
-
-  // if unable to connect to wifi start a config portal  
-    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-      if (serialDebug) Serial.println("Unable to connect to WiFi so starting Wifimanager config portal");
-      ESP_wifiManager.startConfigPortal(AP_SSID, AP_PASS);
-    }    
-
-  // wifi should now be connected
-    if (WiFi.status() == WL_CONNECTED) {
-      if (serialDebug) {
-        Serial.print("Connected to wifi. Local IP: ");
-        Serial.println(WiFi.localIP());
-      }
-      wifiok = 1;  
+  // connect to wifi with Autoconnect
+    if (serialDebug) Serial.println("Connecting to wifi...");
+    portal.config(ACconfig);
+    if (portal.begin()) {
+      if (serialDebug) Serial.println("WiFi connected: " + WiFi.localIP().toString());
+      wifiok = 1;
     } else {
-      if (serialDebug) {
-        Serial.print("Wifi connection failed so rebooting: ");
-        Serial.println(ESP_wifiManager.getStatus(WiFi.status()));
-      }
+      if (serialDebug) Serial.print("Wifi connection failed so rebooting: ");
       delay(1000);
-      ESP.restart();  
-      delay(5000);           // restart will fail without this delay      
-    }  
-          
+      ESP.restart();
+      delay(5000);           // restart will fail without this delay
+    }
+
+// delete temporary Autoconnect webserver
+  #if defined ESP32
+    ACserver.stop();
+  #else
+    delete ACserver;
+  #endif
+
+// set wifi to auto re-connect if connection is lost
+  WiFi.setAutoReconnect(1);
+
 //  // Set up mDNS responder:
 //    if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
 
   // start NTP (Time)
-    NTPUdp.begin(localPort); 
+    NTPUdp.begin(localPort);
     setSyncProvider(getNTPTime);              // the function that gets the time from NTP
-    setSyncInterval(_resyncErrorSeconds);     // How often to re-synchronise the time (in seconds) 
-         
+    setSyncInterval(_resyncErrorSeconds);     // How often to re-synchronise the time (in seconds)
+
 }  // startwifimanager
 
 
 // ----------------------------------------------------------------
 //          -Return current time and date as a string
 // ----------------------------------------------------------------
-// Note: in this format so it can be sorted by date order if stored on sd card etc.
+// Notes: two formats available, for British summer time
 
-String currentTime(){
+String currentTime(bool dFormat = 1){
 
    time_t t=now();     // get current time
    String ttime;
@@ -153,21 +154,39 @@ String currentTime(){
 
    if (IsBST()) t+=3600;     // add one hour if it is Summer Time
 
-   // date
-   ttime += String(year(t));
-   tstore = month(t);   if (tstore<10) ttime+="0";
-   ttime += String(tstore);
-   tstore = day(t);   if (tstore<10) ttime+="0";
-   ttime += String(tstore) + "_";
-
-   // time
-   tstore = hour(t);   if (tstore<10) ttime+="0";
-   ttime += String(tstore);
-   tstore = minute(t);   if (tstore<10) ttime+="0";
-   ttime += String(tstore);
-   tstore = second(t);   if (tstore<10) ttime+="0";
-   ttime += String(tstore);
-   ttime += "_" + DoW[weekday(t)-1];
+   if (dFormat == 0) {
+    // format suitable for file names
+        // date
+          ttime += String(year(t));
+          tstore = month(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore);
+          tstore = day(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore) + "_";
+        // time
+          tstore = hour(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore);
+          tstore = minute(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore);
+          tstore = second(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore);
+          ttime += "_" + DoW[weekday(t)-1];
+   } else {
+    // format easily read by humans
+        // date
+          ttime += DoW[weekday(t)-1] + " ";
+          tstore = day(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore) + "/";      
+          tstore = month(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore) + "/";
+          ttime += String(year(t)) + " ";
+        // time
+          tstore = hour(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore) + ":";
+          tstore = minute(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore) + ":";
+          tstore = second(t);   if (tstore<10) ttime+="0";
+          ttime += String(tstore);      
+   }      
 
    return ttime;
 
@@ -184,35 +203,35 @@ bool IsBST() {
     int imonth = month();
     int iday = day();
     int hr = hour();
-    
+
     //January, february, and november are out.
     if (imonth < 3 || imonth > 10) { return false; }
-    
+
     //April to September are in
     if (imonth > 3 && imonth < 10) { return true; }
 
     // find last sun in mar and oct - quickest way I've found to do it
     // last sunday of march
     int lastMarSunday =  (31 - (5* year() /4 + 4) % 7);
-    
+
     //last sunday of october
     int lastOctSunday = (31 - (5 * year() /4 + 1) % 7);
-        
+
     //In march, we are BST if is the last sunday in the month
-    if (imonth == 3) { 
+    if (imonth == 3) {
       if( iday > lastMarSunday) return true;
       if( iday < lastMarSunday) return false;
-      if (hr < 1) return false;       
-      return true; 
+      if (hr < 1) return false;
+      return true;
     }
-    
+
     //In October we must be before the last sunday to be bst.
     //That means the previous sunday must be before the 1st.
-    if (imonth == 10) { 
+    if (imonth == 10) {
       if( iday < lastOctSunday) return true;
-      if( iday > lastOctSunday) return false;  
+      if( iday > lastOctSunday) return false;
       if (hr >= 1) return false;
-      return true;  
+      return true;
     }
 
     return true;   // this is here just to stop compiler getting upset ;-)
@@ -225,7 +244,7 @@ bool IsBST() {
 //-----------------------------------------------------------------------------
 
 void sendNTPpacket(const char* address) {
-  
+
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -251,7 +270,7 @@ void sendNTPpacket(const char* address) {
 
   // All done, the underlying buffer is now updated
   NTPUdp.endPacket();
-  
+
 }  // sendNTPpacket
 
 
@@ -298,7 +317,7 @@ time_t getNTPTime() {
     // now convert NTP time into everyday time:
 
     // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-    const unsigned long seventyYears = 2208988800UL;     // UL denotes it is 'unsigned long' 
+    const unsigned long seventyYears = 2208988800UL;     // UL denotes it is 'unsigned long'
 
     // subtract seventy years:
     unsigned long epoch = secsSince1900 - seventyYears;
@@ -314,106 +333,51 @@ time_t getNTPTime() {
     setSyncInterval(_resyncErrorSeconds);       // try more frequently until a response is received
 
     return 0;
-    
+
 }  // getNTPTime
 
 
 // ----------------------------------------------------------------
 //                        request a web page
 // ----------------------------------------------------------------
-//   @param    ip           ip address
 //   @param    page         web page to request
-//   @param    port         ip port to use (usually 80)
-//   @param    maxChars     maximum number of chars to receive
-//   @param    cuttoffText  ignore all in reply before this text 
-//   @return   the reply as a string
-//   Example usage: requestWebPage("192.168.1.166", "/log", 80, 600, "");
-
-String requestWebPage(String ip, String page, int port, int maxChars, String cuttoffText = ""){
-
-  int maxWaitTime = 3000;                 // max time to wait for reply (ms)
-
-  char received[maxChars + 1];            // temp store for incoming character data
-  int received_counter = 0;               // counter of number of characters which have been received
-
-  if (!page.startsWith("/")) page = "/" + page;     // make sure page begins with "/" 
-
-  if (serialDebug) {
-    Serial.print("requesting web page: ");
-    Serial.print(ip);
-    Serial.println(page);
-  }
-     
-    WiFiClient client;
-
-    // Connect to the site 
-      if (!client.connect(ip.c_str() , port)) {                                      
-        if (serialDebug) Serial.println("Web client connection failed");   
-        return "web client connection failed";
-      } 
-      if (serialDebug) Serial.println("Connected to host - sending request...");
-    
-    // send request - A basic request looks something like: "GET /index.html HTTP/1.1\r\nHost: 192.168.0.4:8085\r\n\r\n"
-      client.println("GET " + page + " HTTP/1.1 ");
-      client.println("Host: " + ip );
-      client.println("User-Agent: arduino-ethernet");
-      client.println("Connection: close");
-      client.println();    // needed to end HTTP header
-  
-      if (serialDebug) Serial.println("Request sent - waiting for reply...");
-  
-    // Wait for a response
-      uint32_t ttimer = millis();
-      while ( client.connected() && !client.available() && (uint32_t)(millis() - ttimer) < maxWaitTime ) {
-        delay(10);
-      }
-      if ( ((uint32_t)(millis() - ttimer) > maxWaitTime ) && serialDebug) Serial.println("-Timed out");
-
-    // read the response
-      while ( client.connected() && client.available() && received_counter < maxChars ) {
-        delay(4); 
-        received[received_counter] = char(client.read());     // read one character
-        received_counter+=1;
-      }
-      received[received_counter] = '\0';     // end of string marker
-            
-    if (serialDebug) {
-      Serial.println("--------received web page-----------");
-      Serial.println(received);
-      Serial.println("------------------------------------");
-      Serial.flush();     // wait for serial data to finish sending
-    }
-    
-    client.stop();    // close connection
-    if (serialDebug) Serial.println("Connection closed");
-
-    // if cuttoffText was supplied then only return the text following this 
-      if (cuttoffText != "") {
-        char* locus = strstr(received,cuttoffText.c_str());    // locus = pointer to the found text
-        if (locus) {                                           // if text was found
-          if (serialDebug) Serial.println("The text '" + cuttoffText + "' was found in reply");
-          return locus;                                        // return the reply text following 'cuttoffText'
-        } else if (serialDebug) Serial.println("The text '" + cuttoffText + "' WAS NOT found in reply");
-      }
-    
-  return received;        // return the full reply text
-  
-}  // requestWebPage
-
-
+//   @param    received     String to store response in
+//   @param    maxWaitTime  maximum time to wait for reply (ms)
+//   @returns  http code
 /*
-    Idea for better code:
-    
-                                char espBuffer[1024] = {0};
-                                int readCount = 0;
-                                long startTime = millis();
-
-                                while (millis() - startTime < 5000) { // Run for at least 5 seconds 
-                                // Check to make sure we don't exceed espBuffer's boundaries
-                                    if (ESPserial.available() > readCount + sizeof espBuffer - 1) break;
-                                    readCount += ESPserial.readBytes(espBuffer + readCount, ESPserial.available());
-                                }
-
+      see:  https://randomnerdtutorials.com/esp32-http-get-post-arduino/#http-get-1
+      Example usage:
+                              String page = "http://192.168.1.166/ping";   // url to request
+                              String response;                             // reply will be stored here
+                              int httpCode = requestWebPage(&page, &response);
+                              // show results
+                                Serial.println("Web page requested: '" + page + "' - http code: " + String(httpCode));
+                                Serial.println(response);
 */
+
+int requestWebPage(String* page, String* received, int maxWaitTime=5000){
+
+  if (serialDebug) Serial.println("requesting web page: " + *page);
+
+  WiFiClient client;
+  HTTPClient http;     // see:  https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266HTTPClient
+  http.setTimeout(maxWaitTime);
+  http.begin(client, *page);      // for https requires (client, *page, thumbprint)  e.g.String thumbprint="08:3B:71:72:02:43:6E:CA:ED:42:86:93:BA:7E:DF:81:C4:BC:62:30";
+  int httpCode = http.GET();      // http codes: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+  if (serialDebug) Serial.println("http code: " + String(httpCode));
+
+  if (httpCode > 0) {
+    *received = http.getString();
+  } else {
+    *received = "error:" + String(httpCode);
+  }
+  if (serialDebug) Serial.println(*received);
+
+  http.end();   //Close connection
+  if (serialDebug) Serial.println("Web connection closed");
+
+  return httpCode;
+
+}  // requestWebPage
 
 // --------------------------- E N D -----------------------------
