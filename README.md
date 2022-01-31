@@ -28,8 +28,10 @@ your router or by viewing the terminal window in the Arduino IDE).
 
 If you look in the procedure "handleRoot", the lower part is where it creates any control buttons and the top part is 
 where it performs any actions when the buttons are pressed.  Any information you want to update (e.g. sensor status) 
-are put in the procedure "data" as this is then automatically updated every few seconds (not the ideal way to do this 
-but I think the simplest).
+are put in the procedure "data" as this is then automatically updated every few seconds.
+It uses AJAX to update the info., this is not done in the conventional way where variable data is passed but instead passes 
+complete lines of text, it may not be elegant but it makes changing what information is displayed much easier as all you 
+have to do is modify what info handleData() sends.
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
 
