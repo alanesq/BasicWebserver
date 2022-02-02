@@ -34,14 +34,6 @@ complete lines of text, it may not be elegant but it makes changing what informa
 have to do is modify what info handleData() sends.
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
-
-The librarys used by the sketch are 
-	khoih-prog/ESP_WifiManager@^1.7.5
-	paulstoffregen/Time@^1.6.1
-	adafruit/Adafruit SSD1306@^2.5.0
-	adafruit/Adafruit BusIO@^1.9.4
-	mobizt/ESP Mail Client@^1.5.10
-	fastled/FastLED@^3.4.0
   
 ESP8266 addon package = v2.5.2     (I find problems if useing a newer version)
     from http://arduino.esp8266.com/stable/package_esp8266com_index.json
