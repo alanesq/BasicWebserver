@@ -22,7 +22,7 @@ Note: It does not work with the latest esp32 Arduino addin (i.e. v2) as ESP_Wifi
 
 The sketch as it is will first create a wifi access point named "espserver", you need to connect to this with the 
 password "12345678" and you will then be able to enter your wifi network details so it is then able to connect to it 
-(it uses the WifiManager library to do this which is included in the above file).  Once connected to your network you 
+(it uses the Autoconnect library to do this which is included in the above file).  Once connected to your network you 
 should be able to view a similar web page to the image above (you will need to find out what ip address it is using from 
 your router or by viewing the terminal window in the Arduino IDE).
 
@@ -35,9 +35,14 @@ have to do is modify what info handleData() sends.
 
 You can then add your own code to the "loop" section to perform whatever tasks you wish...
 
-The librarys used by the sketch are in "libraries used.zip" (copy them in to your libraries folder).
-Note: I have recently updated this sketch to use newer versions of libraries so if you have an older version you will
-      need to update your installed libraries.
+The librarys used by the sketch are 
+	khoih-prog/ESP_WifiManager@^1.7.5
+	paulstoffregen/Time@^1.6.1
+	adafruit/Adafruit SSD1306@^2.5.0
+	adafruit/Adafruit BusIO@^1.9.4
+	mobizt/ESP Mail Client@^1.5.10
+	fastled/FastLED@^3.4.0
+  
 ESP8266 addon package = v2.5.2     (I find problems if useing a newer version)
     from http://arduino.esp8266.com/stable/package_esp8266com_index.json
 
