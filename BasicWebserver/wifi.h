@@ -23,7 +23,7 @@
 
 
 // Settings for the configuration portal (Autoconnect)
-  const String AP_SSID = "ESPcam";
+  const String AP_SSID = "ESP";
   const String AP_PASS = "12345678";
 
 
@@ -175,7 +175,7 @@ String currentTime(bool dFormat = 1){
         // date
           ttime += DoW[weekday(t)-1] + " ";
           tstore = day(t);   if (tstore<10) ttime+="0";
-          ttime += String(tstore) + "/";      
+          ttime += String(tstore) + "/";
           tstore = month(t);   if (tstore<10) ttime+="0";
           ttime += String(tstore) + "/";
           ttime += String(year(t)) + " ";
@@ -185,8 +185,8 @@ String currentTime(bool dFormat = 1){
           tstore = minute(t);   if (tstore<10) ttime+="0";
           ttime += String(tstore) + ":";
           tstore = second(t);   if (tstore<10) ttime+="0";
-          ttime += String(tstore);      
-   }      
+          ttime += String(tstore);
+   }
 
    return ttime;
 
