@@ -1,9 +1,8 @@
 /**************************************************************************************************
  *
- *      OLED display simple none blocking menu System - i2c version SSD1306 - 15Nov21
+ *    OLED / rotary encoder based simple none blocking menu System - i2c version SSD1306 - 01Mar22
  *
- *      part of the BasicWebserver sketch
- *
+ *    part of the BasicWebserver sketch -  https://github.com/alanesq/BasicWebserver
  *
  **************************************************************************************************
 
@@ -18,46 +17,64 @@
 
  See the "menus below here" section for examples of how to use the menus
 
- Note: If you get garbage on the display and the device locking up etc. it may just be a poor connection
-       to the rotary encoder
+ see: https://randomnerdtutorials.com/esp32-ssd1306-oled-display-arduino-ide/
+      https://lastminuteengineers.com/oled-display-esp32-tutorial/
 
 
  **************************************************************************************************/
 
 
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Wire.h>                 // i2c
+#include <Adafruit_GFX.h>         // graphics
+#include <Adafruit_SSD1306.h>     // oled display
+#define SSD1306_NO_SPLASH         // disable oled splash screen
 
 
 // ----------------------------------------------------------------
 //                         S E T T I N G S
 // ----------------------------------------------------------------
 
+// Best pins to use on esp32: 4,5,13-19,21-23,25-27,32,33
 
-    //  esp32 lolin lite gpio pins
-      #define encoder0PinA  25                  // Rotary encoder gpio pin
-      #define encoder0PinB  33                  // Rotary encoder gpio pin
-      #define encoder0Press 32                  // Rotary encoder button gpio pin
-      #define OLEDC 26                          // oled clock pin (set to -1 for default)
-      #define OLEDD 27                          // oled data pin
+
+/*
+    //  esp32 - cnc pcb
+      #define encoder0PinA  21                  // Rotary encoder gpio pin - 16
+      #define encoder0PinB  22                  // Rotary encoder gpio pin - 17
+      #define encoder0Press 23                  // Rotary encoder button gpio pin - 23
+      #define OLEDC 4                           // oled clock pin (set to -1 for default) - 26
+      #define OLEDD 16                          // oled data pin - 27
       #define OLEDE -1                          // oled enable pin (set to -1 if not used)
+*/
 
-//    //  esp32 HiLetGo gpio pins - https://robotzero.one/heltec-wifi-kit-32/
-//      #define encoder0PinA  25                  // Rotary encoder gpio pin
-//      #define encoder0PinB  33                  // Rotary encoder gpio pin
-//      #define encoder0Press 32                  // Rotary encoder button gpio pin
-//      #define OLEDC 15                          // oled clock pin (set to 0 for default)
-//      #define OLEDD 4                           // oled data pin
-//      #define OLEDE 16                          // oled enable pin (set to -1 if not used)
+/*
+      //  esp32 - breadboard
+        #define encoder0PinA  32                  // Rotary encoder gpio pin - 16
+        #define encoder0PinB  33                  // Rotary encoder gpio pin - 17
+        #define encoder0Press 23                  // Rotary encoder button gpio pin - 23
+        #define OLEDC 26                          // oled clock pin (set to -1 for default) - 26
+        #define OLEDD 27                          // oled data pin - 27
+        #define OLEDE -1                          // oled enable pin (set to -1 if not used)
+*/
 
-//    // esp8266 gpio pins
-//      #define encoder0PinA  14                  // Rotary encoder gpio pin, 14 = D5 on esp8266
-//      #define encoder0PinB  12                  // Rotary encoder gpio pin, 12 = D6 on esp8266
-//      #define encoder0Press 13                  // Rotary encoder button gpio pin, 13 = D7 on esp8266
-//      #define OLEDC -1                          // oled clock pin (set to 0 for default)
-//      #define OLEDD 0                           // oled data pin
-//      #define OLEDE -1                          // oled enable pin (set to -1 if not used)
+   //  esp32 HiLetGo gpio pins - https://robotzero.one/heltec-wifi-kit-32/
+     #define encoder0PinA  12                  // Rotary encoder gpio pin  (note 25 is LED on HiLetGo board)
+     #define encoder0PinB  13                  // Rotary encoder gpio pin
+     #define encoder0Press 14                  // Rotary encoder button gpio pin
+     #define OLEDC 15                          // oled clock pin (set to -1 for default)
+     #define OLEDD 4                           // oled data pin
+     #define OLEDE 16                          // oled enable pin (set to -1 if not used)
+
+/*
+    // esp8266 gpio pins
+      #define encoder0PinA  14                  // Rotary encoder gpio pin, 14 = D5 on esp8266 - 14
+      #define encoder0PinB  12                  // Rotary encoder gpio pin, 12 = D6 on esp8266 - 12
+      #define encoder0Press 13                  // Rotary encoder button gpio pin, 13 = D7 on esp8266 - 13
+      #define OLEDC -1                          // oled clock pin (set to -1 for default) - D1
+      #define OLEDD -1                          // oled data pin - D2
+      #define OLEDE -1                          // oled enable pin (set to -1 if not used)
+*/
+
 
     // oLED settings
       #define OLED_ADDR 0x3C                    // OLED i2c address
@@ -68,7 +85,7 @@
     // Misc settings
       #define BUTTONPRESSEDSTATE 0              // rotary encoder button gpio pin logic level when the pressed (usually 0)
       #define DEBOUNCEDELAY 60                  // debounce delay for button inputs
-      const int defaultMenuTimeout = 10;        // default menu inactivity timeout (seconds)
+      const uint32_t defaultMenuTimeout = 10;   // default menu inactivity timeout (seconds)
       const bool menuLargeText = 0;             // show larger text when possible (to help with readability)
       const int maxMenuItems = 12;              // max number of items used in any of the menus (keep as low as possible to save memory)
       const int itemTrigger = 1;                // rotary encoder - counts per tick (varies between encoders usually 1 or 2)
@@ -77,13 +94,14 @@
       const byte lineSpace2 = 17;               // line spacing for textsize 2 (large text)
       const int displayMaxLines = 5;            // max lines that can be displayed in lower section of display in textsize1 (5 on larger oLeds)
       const int MaxmenuTitleLength = 10;        // max characters per line when using text size 2 (usually 10)
+      const int minOLEDrefreshTime = 50;        // minimum time between oled updates (ms)
 
 
 // -------------------------------------------------------------------------------------------------
 
 
 // forward declarations (to allow the procedures to be out of logical order below)
-  void ICACHE_RAM_ATTR doEncoder();
+  void IRAM_ATTR doEncoder();
   void resetMenu(bool);
   void serviceMenu();
   int checkEncoder();
@@ -92,6 +110,10 @@
   void displayMessage(String, String);
   void defaultMenu();
   void reUpdateButton();
+
+
+// misc variables
+  uint32_t minOLEDrefreshTimer = 0;              // timer for oled updates
 
 
 // menus
@@ -117,7 +139,7 @@
     int mValueHigh = 0;                       // highest allowed value
     int mActionFlag = 0;                      // flag which can be used to signal desired action after user input
     int mValueStep = 0;                       // step size when encoder is turned (enter value)
-    int menuTimeout = defaultMenuTimeout;     // timeout (seconds)
+    uint32_t menuTimeout = defaultMenuTimeout;// timeout (seconds)
   };
   oledMenus oledMenu;
 
@@ -302,6 +324,7 @@ void oledSetup() {
       }
     if (-1 == OLEDC) Wire.begin();
     else Wire.begin(OLEDD, OLEDC);
+    //Wire.setClock(100000);    // change i2c bus speed
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
       if (serialDebug) Serial.println(("\nError initialising the oled display"));
     }
@@ -326,7 +349,15 @@ void oledSetup() {
 
 void oledLoop() {
 
-  reUpdateButton();               // update rotary encoder button status (if pressed activate default menu)
+  reUpdateButton();                          // update rotary encoder button status (if pressed activate default menu)
+
+  // check if too soon to do an update
+    if ( (unsigned long)(millis() - minOLEDrefreshTimer) < minOLEDrefreshTime ) {
+      return;
+    } else {
+      minOLEDrefreshTimer = millis();    // reset timer
+    }
+
   if (menuMode == menuModes::off) return;    // if menu system is turned off do nothing more
 
   // if no recent activity then turn oled off
@@ -630,7 +661,8 @@ void resetMenu(bool _timeout) {
 // rotary encoder interrupt routine to update position counter when turned
 //     interrupt info: https://www.gammon.com.au/forum/bbshowpost.php?id=11488
 
-void ICACHE_RAM_ATTR doEncoder() {
+//void ICACHE_RAM_ATTR doEncoder() {
+void IRAM_ATTR doEncoder() {
 
   bool pinA = digitalRead(encoder0PinA);
   bool pinB = digitalRead(encoder0PinB);
@@ -649,8 +681,8 @@ void ICACHE_RAM_ATTR doEncoder() {
     else if (rotaryEncoder.encoderPrevA == 0 && rotaryEncoder.encoderPrevB == 0 && pinA == 1 && pinB == 0) rotaryEncoder.encoder0Pos -= 1;
     else if (rotaryEncoder.encoderPrevA == 1 && rotaryEncoder.encoderPrevB == 1 && pinA == 0 && pinB == 1) rotaryEncoder.encoder0Pos -= 1;
 
-  //  else if (serialDebug) Serial.println("Error: invalid rotary encoder pin state - prev=" + String(rotaryEncoder.encoderPrevA) + ","
-  //                                        + String(rotaryEncoder.encoderPrevB) + " new=" + String(pinA) + "," + String(pinB));
+    //else if (serialDebug) Serial.println("Error: invalid rotary encoder pin state - prev=" + String(rotaryEncoder.encoderPrevA) + ","
+    //                                      + String(rotaryEncoder.encoderPrevB) + " new=" + String(pinA) + "," + String(pinB));
 
   // update previous readings
     rotaryEncoder.encoderPrevA = pinA;

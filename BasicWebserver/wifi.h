@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Wifi / NTP Connections using Autoconnect - 16Jan22
+ *      Wifi / NTP Connections - has the option to use WifiManager - 06Nov23
  *
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *
@@ -9,23 +9,32 @@
  *      see:  https://nodemcu.readthedocs.io/en/release/modules/wifi/
  *
  *      Libraries used:
- *                      Autoconnect - https://hieromon.github.io/AutoConnect
- *                                    also installs PageBuilder and ArduinoJson
+ *                      WiFiManager      https://github.com/tzapu/WiFiManager
  *                      TimeLib
  *                      ESPmDNS
  *
- **************************************************************************************************/
+ **************************************************************************************************
+ 
+*/
 
 #include <Arduino.h>                      // required by PlatformIO
+#define WIFIUSED 1                        // flag that wifi.h is in use
 
 
 // **************************************** S e t t i n g s ****************************************
 
 
-// Settings for the configuration portal (Autoconnect)
-  const String AP_SSID = "ESP";
-  const String AP_PASS = "12345678";
+// Note: If using Wifi Manager use startWifiManager(), for standard connection use startWifi()
 
+
+// Settings for main wifi (if not using wifi manager)
+  const char *SSID = "<wifi ssid>";
+  const char *PWD = "<wifi password>";  
+  const int wifiTimeout = 20;          // timeout when connecting to wifi (seconds)
+
+// Settings for the configuration Portal (Wifi Manager)
+  const char* AP_SSID = "ESPBWS";
+  const char* AP_PASS = "password";
 
 
 // *************************************************************************************************
@@ -33,6 +42,7 @@
 
 // forward declarations
   void startWifiManager();
+  void startWifi();
   String currentTime(bool);
   bool IsBST();
   void sendNTPpacket();
@@ -51,36 +61,32 @@
     #include <WiFiClient.h>
     //#include <WiFiMulti.h>
     #include <WebServer.h>    // https://github.com/espressif/arduino-esp32/blob/master/libraries/WebServer
+    #include <HTTPClient.h>       
     #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
-    WebServer ACserver(80);               // temporary for autoconnect
-    WebServer server(ServerPort);         // allows use of different ports
+    //WebServer ACserver(80);               // temporary for autoconnect
+    WebServer server(ServerPort);         // allows use of different port for main web server
     //#include <ESPmDNS.h>                // see https://github.com/espressif/arduino-esp32/tree/master/libraries/ESPmDNS
+    
   #elif defined ESP8266
     #include <ESP8266WiFi.h>              // https://github.com/esp8266/Arduino
     //needed for library
     #include <DNSServer.h>
     //#include <ESP8266WiFiMulti.h>
     #include <ESP8266WebServer.h>
+    #include <ESP8266HTTPClient.h>        // https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266HTTPClient
     #define ESP_getChipId()   (ESP.getChipId())
-    ESP8266WebServer *ACserver = new ESP8266WebServer(80);     // temporary for autoconnect
-    ESP8266WebServer server(ServerPort);                       // allows use of different ports
+    //ESP8266WebServer *ACserver = new ESP8266WebServer(80);     // temporary for autoconnect
+    ESP8266WebServer server(ServerPort);                       // allows use of different port for main web server
     //#include <ESP8266mDNS.h>
+    
   #else
       #error "wifi.h: This sketch only works with ESP8266 or ESP32"
   #endif
 
-// Autoconnect
-  #include <AutoConnect.h>     // https://hieromon.github.io/AutoConnect
-  #if defined ESP32
-    AutoConnect       portal(ACserver);
-  #else
-    AutoConnect       portal(*ACserver);
-  #endif
-  AutoConnectConfig ACconfig;
-
+#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
 // Time from NTP server
-//  from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
+//    from https://raw.githubusercontent.com/RalphBacon/No-Real-Time-Clock-RTC-required---use-an-NTP/master
   #include <TimeLib.h>
   #include <WiFiUdp.h>                          // UDP library which is how we communicate with Time Server
   const uint16_t localPort = 8888;              // Just an open port we can use for the UDP packets coming back in
@@ -95,38 +101,32 @@
 
 
 // ----------------------------------------------------------------
-//                 -wifi initialise  (called from 'setup')
+//                 -wifi initialise  (using wifi manager)
 // ----------------------------------------------------------------
+// called from main SETUP
 
 void startWifiManager() {
 
-  // autoconnect settings - see https://hieromon.github.io/AutoConnect/adnetwork.html#change-ssid-and-password-for-softap
-    ACconfig.apid = AP_SSID;                    // portal name
-    ACconfig.psk  = AP_PASS;                    // portal password
-    ACconfig.portalTimeout = 2 * 60 * 1000;     // timeout (ms)
+  //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
+    WiFiManager wm;
+    // wm.resetSettings();                             // wipe stored settings
+    wm.setConfigPortalTimeout(120);                  // set timeout for config portal
+    bool res = wm.autoConnect(AP_SSID, AP_PASS);     // password protected ap
+    WiFi.setAutoReconnect(0);
 
-  // connect to wifi with Autoconnect
-    if (serialDebug) Serial.println("Connecting to wifi...");
-    portal.config(ACconfig);
-    if (portal.begin()) {
-      if (serialDebug) Serial.println("WiFi connected: " + WiFi.localIP().toString());
-      wifiok = 1;
-    } else {
+  // connect to wifi
+    if(!res) {
       if (serialDebug) Serial.print("Wifi connection failed so rebooting: ");
-      delay(1000);
+      delay(2000);
       ESP.restart();
       delay(5000);           // restart will fail without this delay
+    } else {
+      if (serialDebug) Serial.println("WiFi connected: " + WiFi.localIP().toString());
+      wifiok = 1;
     }
 
-// delete temporary Autoconnect webserver
-  #if defined ESP32
-    ACserver.stop();
-  #else
-    delete ACserver;
-  #endif
-
 // set wifi to auto re-connect if connection is lost
-  WiFi.setAutoReconnect(1);
+  WiFi.setAutoReconnect(0);
 
 //  // Set up mDNS responder:
 //    if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
@@ -137,6 +137,68 @@ void startWifiManager() {
     setSyncInterval(_resyncErrorSeconds);     // How often to re-synchronise the time (in seconds)
 
 }  // startwifimanager
+
+
+// ----------------------------------------------------------------
+//             -wifi initialise  (not using wifi manager)
+// ----------------------------------------------------------------
+// called from main SETUP
+
+void startWifi() {
+
+  // connect to wifi
+    wifiok = 0;
+    if (serialDebug) {
+        Serial.print("Wifi: Connecting to ");
+        Serial.print(SSID);
+    }
+    WiFi.begin(SSID, PWD);
+    
+    int cntr = wifiTimeout;
+    while (WiFi.status() != WL_CONNECTED && cntr > 0) {
+      if (serialDebug) Serial.print(".");
+      delay(1000);
+      cntr -= 1;
+    }  
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiok = 1;
+      log_system_message("Wifi connected: " + WiFi.localIP().toString());
+    } else {
+       log_system_message("Wifi failed to connect");
+    }
+
+  // set wifi to auto re-connect if connection is lost  (crashes the esp for some reason)
+    WiFi.setAutoReconnect(0);
+
+  //  // Set up mDNS responder:
+  //    if (serialDebug) Serial.println( MDNS.begin(mDNS_name.c_str()) ? "mDNS responder started ok" : "Error setting up mDNS responder" );
+
+  // start NTP (Time)
+    NTPUdp.begin(localPort);
+    setSyncProvider(getNTPTime);              // the function that gets the time from NTP
+    setSyncInterval(_resyncErrorSeconds);     // How often to re-synchronise the time (in seconds)
+
+}  // startwifi
+
+
+
+// // ----------------------------------------------------------------
+// //                 -Handle system wifi events
+// // ----------------------------------------------------------------
+// // https://randomnerdtutorials.com/solved-reconnect-esp32-to-wifi
+
+// void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info){
+//   log_system_message("Wifi: Connected to AP successfully!");
+// }
+
+// void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info){
+//   log_system_message("Wifi: Connected to wifi ip:" + WiFi.localIP().toString());
+// }
+
+// void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
+//   log_system_message("Wifi: Disconnected from WiFi access point, Reason: " + String(info.wifi_sta_disconnected.reason));
+//   // WiFi.begin(ssid, password);      // reconnect
+// }
 
 
 // ----------------------------------------------------------------
@@ -244,6 +306,8 @@ bool IsBST() {
 //-----------------------------------------------------------------------------
 
 void sendNTPpacket(const char* address) {
+  
+  if (wifiok != 1) return ;
 
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
@@ -279,6 +343,8 @@ void sendNTPpacket(const char* address) {
 //-----------------------------------------------------------------------------
 
 time_t getNTPTime() {
+
+  if (wifiok != 1) return 0;
 
   // Send a UDP packet to the NTP pool address
   if (serialDebug) {
@@ -358,7 +424,9 @@ time_t getNTPTime() {
 int requestWebPage(String* page, String* received, int maxWaitTime=5000){
 
   if (serialDebug) Serial.println("requesting web page: " + *page);
-
+  #if (defined ESP32)  
+    esp_task_wdt_reset();           // reset watchdog timer  
+  #endif  
   WiFiClient client;
   HTTPClient http;     // see:  https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266HTTPClient
   http.setTimeout(maxWaitTime);
