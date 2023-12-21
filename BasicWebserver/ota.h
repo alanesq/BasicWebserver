@@ -1,6 +1,6 @@
 /**************************************************************************************************
  *
- *      Over The Air updates (OTA) - 01Feb22
+ *      Over The Air updates (OTA) - 21dec23
  *
  *      part of the BasicWebserver sketch - https://github.com/alanesq/BasicWebserver
  *
@@ -12,19 +12,30 @@
     To enable/disable OTA updates see setting at top of main sketch (#define ENABLE_OTA 1)
 
     Then access with    http://<esp ip address>/ota
+    
+    To use this file the main sketch requires to have the below in it:
+    
+        #define ENABLE_OTA 1    
+        const String OTAPassword = "password"; 
+        bool OTAEnabled = 0;  
+        #include "ota.h"    
+        
+        in the web page handling section of setup add:   server.on("/ota", handleOTA);
+        
+        
 
 
  **************************************************************************************************/
 
 
-#if defined ESP32
-  #include <Update.h>
-#endif
-
-
 // forward declarations (i.e. details of all functions in this file)
   void otaSetup();
   void handleOTA();
+  
+
+#if defined ESP32
+  #include <Update.h>
+#endif
 
 
 // ----------------------------------------------------------------
