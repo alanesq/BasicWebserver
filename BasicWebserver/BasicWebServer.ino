@@ -49,7 +49,7 @@
   #error This code is for ESP8266 or ESP32 only
 #endif
 
-// watchdog timer
+// watchdog timer - NOT WORKING WITH ESP32 3.0.0 (disabled in setup)- jun24
   #if (defined ESP32)  
     #include <esp_task_wdt.h>             // watchdog timer   - see: https://iotassistant.io/esp32/enable-hardware-watchdog-timer-esp32-arduino-ide/
   #endif
@@ -239,13 +239,14 @@ void setup() {
     #elif defined ESP32
       WiFi.setSleep(false);
     #endif
-      
-    #if (defined ESP32)  
-      // watchdog timer (esp32)
-        if (serialDebug) Serial.println("Configuring watchdog timer");
-        esp_task_wdt_init(WDT_TIMEOUT, true);                      //enable panic so ESP32 restarts
-        esp_task_wdt_add(NULL);                                    //add current thread to WDT watch    
-    #endif      
+
+    // WACHDOG NOT WORKING WITH ESP32 3.0.0 - jun24
+    //#if (defined ESP32)  
+    //  // watchdog timer (esp32)
+    //    if (serialDebug) Serial.println("Configuring watchdog timer");
+    //    esp_task_wdt_init(WDT_TIMEOUT, true);                      //enable panic so ESP32 restarts
+    //    esp_task_wdt_add(NULL);                                    //add current thread to WDT watch    
+    //#endif      
 
   // Finished connecting to network
     statusLed1.off();                        // turn status led off
